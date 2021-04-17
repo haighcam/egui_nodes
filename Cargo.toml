@@ -3,6 +3,8 @@ name = "egui_nodes"
 version = "0.1.0"
 authors = ["Cameron Haigh <cgwhaigh@gmail.com>"]
 edition = "2018"
+license = "MIT"
+description = "A Egui port of https://github.com/Nelarius/imnodes"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
