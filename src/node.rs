@@ -2,6 +2,7 @@ use derivative::Derivative;
 use super::*;
 
 #[derive(Default, Debug)]
+/// The Style of a Node. If feilds are None then the Context style is used
 pub struct NodeArgs {
     pub background: Option<egui::Color32>,
     pub background_hovered: Option<egui::Color32>,
@@ -108,6 +109,8 @@ impl Default for NodeData {
     }
 }
 
+/// Used to construct a node and stores the relevant ui code for its title and attributes
+/// This is used so that the nodes can be rendered in the context depth order
 #[derive(Derivative, Default)]
 #[derivative(Debug)]
 pub struct NodeConstructor<'a> {
@@ -122,29 +125,46 @@ pub struct NodeConstructor<'a> {
 }
 
 impl<'a, 'b> NodeConstructor<'a> {
+    /// Create a new node to be displayed in a Context. 
+    /// id should be the same accross frames and should not be the same as any other currently used nodes
     pub fn new(id: usize, args: NodeArgs) -> Self {
         Self {id, args, ..Default::default()}
     }  
+
+    /// Add a title to a node
     pub fn with_title(mut self, title: impl FnOnce(&mut egui::Ui) -> egui::Response + 'a) -> Self {
         self.title.replace(Box::new(title));
         self
     }
+
+    /// Add an input attibute to a node, this attribute can be connected to output attributes of other nodes
+    /// id should be the same accross frames and should not be the same as any other currently used attributes
+    /// the attribute should return a egui::Response to be checked for interaction
     pub fn with_input_attribute(mut self, id: usize, args: PinArgs, attribute: impl FnOnce(&mut egui::Ui) -> egui::Response + 'a) -> Self {
         self.attributes.push((id, AttributeType::Input, args, Box::new(attribute)));
         self
     }
+    /// Add an output attibute to a node, this attribute can be connected to input attributes of other nodes
+    /// id should be the same accross frames and should not be the same as any other currently used attributes
+    /// the attribute should return a egui::Response to be checked for interaction
     pub fn with_output_attribute(mut self, id: usize, args: PinArgs, attribute: impl FnOnce(&mut egui::Ui) -> egui::Response + 'a) -> Self {
         self.attributes.push((id, AttributeType::Output, args, Box::new(attribute)));
         self
     }
+    /// Add a static attibute to a node, this attribute can't be connected to any other attributes
+    /// id should be the same accross frames and should not be the same as any other currently used attributes
+    /// the attribute should return a egui::Response to be checked for interaction
     pub fn with_static_attribute(mut self, id: usize, attribute: impl FnOnce(&mut egui::Ui) -> egui::Response + 'a) -> Self {
         self.attributes.push((id, AttributeType::None, PinArgs::default(), Box::new(attribute)));
         self
     }
+    /// Set the position of the node in screen space when it is first created.
+    /// To modify it after creation use one of the set_node_pos methods of the Context
     pub fn with_origin(mut self, origin: egui::Pos2) -> Self {
         self.pos.replace(origin);
         self
     }
+    /// Get the id of this NodeConstructor
     pub fn id(&self) -> usize {
         self.id
     }

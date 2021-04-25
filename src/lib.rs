@@ -1,3 +1,45 @@
+//! egui_nodes: A Egui port of [imnodes](https://github.com/Nelarius/imnodes)
+//! 
+//! # Using egui_nodes
+//! 
+//! There are some simple examples [here](https://github.com/haighcam/egui_nodes/examples)
+//! 
+//! Here is the basic usage:
+//! ``` rust
+//! pub fn example_graph(ctx: &mut Context, links: &mut Vec<(usize, usize)>, ui: &mut Ui) {
+//!     // add nodes with attributes
+//!     let nodes = vec![
+//!         NodeConstructor::new(0, Default::default())
+//!             .with_title(|ui| ui.label("Example Node A"))
+//!             .with_input_attribute(0, Defaut::default(), |ui| ui.label("Input"))
+//!             .with_static_attribute(1, |ui| ui.label("Can't Connect to Me"))
+//!             .with_output_attribute(2, Defaut::default(), |ui| ui.label("Output")),
+//!         NodeConstructor::new(1, Default::default())
+//!             .with_title(|ui| ui.label("Example Node B"))
+//!             .with_static_attribute(3, |ui| ui.label("Can't Connect to Me"))
+//!             .with_output_attribute(4, Defaut::default(), |ui| ui.label("Output"))
+//!             .with_input_attribute(5, Defaut::default(), |ui| ui.label("Input"))
+//!     ];
+//!     
+//!     ctx.show(
+//!         nodes,
+//!         links.iter().enumerate().map(|(i, (start, end))| (i, *start, *end, LinkArgs::default())),
+//!         ui
+//!     );
+//!     
+//!     // remove destroyed links
+//!     if let Some(idx) = ctx.link_destroyed() {
+//!         links.remove(idx);
+//!     }
+//!
+//!     // add created links
+//!     if let Some((start, end, _)) = self.ctx.link_created() {
+//!         links.push((start, end))
+//!     }
+//! }
+//! ```
+
+
 use std::collections::HashMap;
 use derivative::Derivative;
 
@@ -6,18 +48,18 @@ mod node;
 mod link;
 mod pin;
 
-use style::*;
 use node::*;
 use link::*;
 use pin::*;
 
 pub use {
     pin::{PinShape, AttributeFlags, PinArgs},
-    style::{StyleFlags, StyleVar, ColorStyle},
+    style::{StyleFlags, StyleVar, ColorStyle, Style},
     node::{NodeConstructor, NodeArgs},
     link::LinkArgs
 };
 
+/// The Context that tracks the state of the node editor
 #[derive(Derivative)]
 #[derivative(Default, Debug)]
 pub struct Context {
@@ -30,19 +72,15 @@ pub struct Context {
     canvas_rect_screen_space: egui::Rect,
 
     #[derivative(Debug="ignore")]
-    io: IO,
+    pub io: IO,
     #[derivative(Debug="ignore")]
-    style: Style,
+    pub style: Style,
     color_modifier_stack: Vec<ColorStyleElement>,
     style_modifier_stack: Vec<StyleElement>,
     text_buffer: String,
 
     current_attribute_flags: usize, 
     attribute_flag_stack: Vec<usize>,
-
-    current_node_idx: usize,
-    current_pin_idx: usize,
-    current_attribute_idx: usize,
 
     hovered_node_index: Option<usize>,
     interactive_node_index: Option<usize>,
@@ -89,7 +127,11 @@ pub struct Context {
 }
 
 impl Context {
+    /// Displays the current state of the editor on a give Egui Ui as well as updating user input to the context
     pub fn show<'a>(&mut self, nodes: impl IntoIterator<Item=NodeConstructor<'a>>, links: impl IntoIterator<Item=(usize, usize, usize, LinkArgs)>, ui: &mut egui::Ui) -> egui::Response {
+        let rect = ui.available_rect_before_wrap_finite();
+        self.canvas_rect_screen_space = rect;
+        self.canvas_origin_screen_space = self.canvas_rect_screen_space.min.to_vec2();
         {
             self.nodes.reset();
             self.pins.reset();
@@ -105,38 +147,19 @@ impl Context {
             self.node_indices_overlapping_with_mouse.clear();
             self.element_state_change = ElementStateChange::None as usize;
 
-            let io = ui.ctx().input();
-            let mouse_pos = io.pointer.hover_pos().unwrap_or(self.mouse_pos);
-            self.mouse_delta = mouse_pos - self.mouse_pos;
-            self.mouse_pos = mouse_pos;
-            let left_mouse_clicked = io.pointer.button_down(egui::PointerButton::Primary);
-            self.left_mouse_released = (self.left_mouse_clicked || self.left_mouse_dragging) && !left_mouse_clicked;
-            self.left_mouse_dragging = (self.left_mouse_clicked || self.left_mouse_dragging) && left_mouse_clicked;
-            self.left_mouse_clicked = left_mouse_clicked && !(self.left_mouse_clicked || self.left_mouse_dragging);
-
-            let alt_mouse_clicked = 
-                self.io.emulate_three_button_mouse.is_active(&io.modifiers) ||
-                self.io.alt_mouse_button.map_or(false, |x| io.pointer.button_down(x));
-            self.alt_mouse_dragging = (self.alt_mouse_clicked || self.alt_mouse_dragging) && alt_mouse_clicked;
-            self.alt_mouse_clicked = alt_mouse_clicked && !(self.alt_mouse_clicked || self.alt_mouse_dragging);
-            self.link_detatch_with_modifier_click = self.io.link_detatch_with_modifier_click.is_active(&io.modifiers);
-
             self.active_attribute = false;
         }
-        let rect = ui.available_rect_before_wrap_finite();
-        self.mouse_in_canvas = rect.contains(self.mouse_pos);
-        self.canvas_rect_screen_space = rect;
-        self.canvas_origin_screen_space = rect.min.to_vec2();
+        
         {
-            ui.set_min_size(rect.size());
-            let mut ui = ui.child_ui(rect, egui::Layout::top_down(egui::Align::Center));
+            ui.set_min_size(self.canvas_rect_screen_space.size());
+            let mut ui = ui.child_ui(self.canvas_rect_screen_space, egui::Layout::top_down(egui::Align::Center));
             {
                 let ui = &mut ui;
-                ui.set_clip_rect(rect.intersect(ui.ctx().input().screen_rect()));
-                ui.painter().rect_filled(rect, 0.0, self.style.colors[ColorStyle::GridBackground as usize]);
+                ui.set_clip_rect(self.canvas_rect_screen_space.intersect(ui.ctx().input().screen_rect()));
+                ui.painter().rect_filled(self.canvas_rect_screen_space, 0.0, self.style.colors[ColorStyle::GridBackground as usize]);
 
                 if (self.style.flags & StyleFlags::GridLines as usize) != 0 {
-                    self.draw_grid(rect.size(), ui);
+                    self.draw_grid(self.canvas_rect_screen_space.size(), ui);
                 }
 
                 let links = links.into_iter().collect::<Vec<_>>();
@@ -144,14 +167,36 @@ impl Context {
                     self.add_link(id, start, end, args, ui);
                 }
 
-                let mut nodes = nodes.into_iter().map(|x| (self.node_pool_find_or_create_index(x.id), x)).collect::<HashMap<_, _>>();
+                let mut nodes = nodes.into_iter().map(|x| (self.node_pool_find_or_create_index(x.id, x.pos), x)).collect::<HashMap<_, _>>();
                 for idx in self.node_depth_order.clone() {
                     if let Some(node_builder) = nodes.remove(&idx) {
                         self.add_node(idx, node_builder, ui);
                     }
                 }
+            }
+            let response = ui.interact(self.canvas_rect_screen_space, ui.id().with("Input"), egui::Sense::click_and_drag());
+            {
+                let io = ui.ctx().input();
+                let mouse_pos = if let Some(mouse_pos) = response.hover_pos() {
+                    self.mouse_in_canvas = true;
+                    mouse_pos
+                } else {
+                    self.mouse_in_canvas = false;
+                    self.mouse_pos
+                };
+                self.mouse_delta = mouse_pos - self.mouse_pos;
+                self.mouse_pos = mouse_pos;
+                let left_mouse_clicked = io.pointer.button_down(egui::PointerButton::Primary);
+                self.left_mouse_released = (self.left_mouse_clicked || self.left_mouse_dragging) && !left_mouse_clicked;
+                self.left_mouse_dragging = (self.left_mouse_clicked || self.left_mouse_dragging) && left_mouse_clicked;
+                self.left_mouse_clicked = left_mouse_clicked && !(self.left_mouse_clicked || self.left_mouse_dragging);
 
-                
+                let alt_mouse_clicked = 
+                    self.io.emulate_three_button_mouse.is_active(&io.modifiers) ||
+                    self.io.alt_mouse_button.map_or(false, |x| io.pointer.button_down(x));
+                self.alt_mouse_dragging = (self.alt_mouse_clicked || self.alt_mouse_dragging) && alt_mouse_clicked;
+                self.alt_mouse_clicked = alt_mouse_clicked && !(self.alt_mouse_clicked || self.alt_mouse_dragging);
+                self.link_detatch_with_modifier_click = self.io.link_detatch_with_modifier_click.is_active(&io.modifiers);
             }
             {
                 let ui = &mut ui;
@@ -191,32 +236,38 @@ impl Context {
                 self.links.update();
             }
             ui.painter().rect_stroke(self.canvas_rect_screen_space, 0.0, (1.0, self.style.colors[ColorStyle::GridLine as usize]));
+            response
         }
-        ui.interact(self.canvas_rect_screen_space, ui.id().with("input"), egui::Sense::click_and_drag())
     }
     
+    /// Push a sigle AttributeFlags value, by default only None is set. 
+    /// Used for pins that don't have a specific attribute flag specified
     pub fn attribute_flag_push(&mut self, flag: AttributeFlags) {
         self.attribute_flag_stack.push(self.current_attribute_flags);
         self.current_attribute_flags |= flag as usize;
     }
 
+    /// Remove the last added AttributeFlags value
     pub fn attribute_flag_pop(&mut self) {
         if let Some(flags) = self.attribute_flag_stack.pop() {
             self.current_attribute_flags = flags;
         }
     }
 
+    /// Changes the current colors used by the editor
     pub fn color_style_push(&mut self, item: ColorStyle, color: egui::Color32) {
         self.color_modifier_stack.push(ColorStyleElement::new(self.style.colors[item as usize], item));
         self.style.colors[item as usize] = color;
     }
 
+    /// Revert the last color change
     pub fn color_style_pop(&mut self) {
         if let Some(elem) = self.color_modifier_stack.pop() {
             self.style.colors[elem.item as usize] = elem.color;
         }
     }
 
+    /// Change a context style value
     pub fn style_var_push(&mut self, item: StyleVar, value: f32) {
         let style_var = self.lookup_style_var(item);
         let elem = StyleElement::new(*style_var, item);
@@ -224,6 +275,7 @@ impl Context {
         self.style_modifier_stack.push(elem);
     }
 
+    /// Revert the last context style change
     pub fn style_var_pop(&mut self) {
         if let Some(elem) = self.style_modifier_stack.pop() {
             let style_var = self.lookup_style_var(elem.item);
@@ -232,22 +284,22 @@ impl Context {
     }
 
     pub fn set_node_pos_screen_space(&mut self, node_id: usize, screen_space_pos: egui::Pos2) {
-        let idx = self.node_pool_find_or_create_index(node_id);
+        let idx = self.node_pool_find_or_create_index(node_id, None);
         self.nodes.pool[idx].origin = self.screen_space_to_grid_space(screen_space_pos);
     }
 
     pub fn set_node_pos_editor_space(&mut self, node_id: usize, editor_space_pos: egui::Pos2) {
-        let idx = self.node_pool_find_or_create_index(node_id);
+        let idx = self.node_pool_find_or_create_index(node_id, None);
         self.nodes.pool[idx].origin = self.editor_space_to_grid_spcae(editor_space_pos);
     }
 
     pub fn set_node_pos_grid_space(&mut self, node_id: usize, grid_pos: egui::Pos2) {
-        let idx = self.node_pool_find_or_create_index(node_id);
+        let idx = self.node_pool_find_or_create_index(node_id, None);
         self.nodes.pool[idx].origin = grid_pos;
     }
 
     pub fn set_node_draggable(&mut self, node_id: usize, draggable: bool) {
-        let idx = self.node_pool_find_or_create_index(node_id);
+        let idx = self.node_pool_find_or_create_index(node_id, None);
         self.nodes.pool[idx].draggable = draggable;
     }
 
@@ -263,14 +315,17 @@ impl Context {
         self.nodes.find(node_id).map(|x| self.nodes.pool[x].origin)
     }
 
+    /// Check if there is a node that is hovered by the pointer
     pub fn node_hovered(&self) -> Option<usize> {
         self.hovered_node_index.map(|x| self.nodes.pool[x].id)
     }
 
+    /// Check if there is a link that is hovered by the pointer
     pub fn link_hovered(&self) -> Option<usize> {
         self.hovered_link_idx.map(|x| self.links.pool[x].id)
     }
 
+    /// Check if there is a pin that is hovered by the pointer
     pub fn pin_hovered(&self) -> Option<usize> {
         self.hovered_pin_index.map(|x| self.pins.pool[x].id)
     }
@@ -295,10 +350,7 @@ impl Context {
         self.selected_link_indices.clear()
     }
 
-    pub fn is_attribute_active(&self) -> bool {
-        self.active_attribute && self.active_attribute_id == self.current_attribute_idx
-    }
-
+    /// Check if an attribute is currently being interacted with
     pub fn active_attribute(&self) -> Option<usize> {
         if self.active_attribute {
             Some(self.active_attribute_id)
@@ -307,6 +359,7 @@ impl Context {
         }
     }
 
+    /// Has a new link been created from a pin?
     pub fn link_started(&self) -> Option<usize> {
         if (self.element_state_change & ElementStateChange::LinkStarted as usize) != 0 {
             Some(self.pins.pool[self.click_interaction_state.link_creation.start_pin_idx].id)
@@ -315,6 +368,7 @@ impl Context {
         }
     }
 
+    /// Has a link been dropped? if including_detached_links then links that were detached then dropped are included
     pub fn link_dropped(&self, including_detached_links: bool) -> Option<usize> {
         if (self.element_state_change & ElementStateChange::LinkDropped as usize) != 0 &&
             (including_detached_links || self.click_interaction_state.link_creation.link_creation_type != LinkCreationType::FromDetach) {
@@ -324,7 +378,9 @@ impl Context {
         }
     }
 
-    pub fn link_created(&self) -> Option<(usize, usize, bool)> { // start_pin, end_pin, created_from_snap
+    /// Has a new link been created?
+    /// -> Option<start_pin, end_pin created_from_snap>
+    pub fn link_created(&self) -> Option<(usize, usize, bool)> {
         if (self.element_state_change & ElementStateChange::LinkCreated as usize) != 0 {
             let (start_pin_id, end_pin_id) = {
                 let start_pin = &self.pins.pool[self.click_interaction_state.link_creation.start_pin_idx];
@@ -342,7 +398,9 @@ impl Context {
         }
     }
 
-    pub fn link_created_node(&self) -> Option<(usize, usize, usize, usize, bool)> { // start_pin, end_pin, created_from_snap
+    /// Has a new link been created? Includes start and end node
+    /// -> Option<start_pin, start_node, end_pin, end_node created_from_snap>
+    pub fn link_created_node(&self) -> Option<(usize, usize, usize, usize, bool)> { 
         if (self.element_state_change & ElementStateChange::LinkCreated as usize) != 0 {
             let (start_pin_id, start_node_id, end_pin_id, end_node_id) = {
                 let start_pin = &self.pins.pool[self.click_interaction_state.link_creation.start_pin_idx];
@@ -362,6 +420,7 @@ impl Context {
         }
     }
 
+    // Was an existing link detached?
     pub fn link_destroyed(&self) -> Option<usize> {
         self.deleted_link_idx
     }
@@ -425,7 +484,6 @@ impl Context {
     }
 
     fn add_attribute(&mut self, id: usize, kind: AttributeType, args: PinArgs, response: egui::Response, node_idx: usize, shape: egui::layers::ShapeIdx) {
-        self.current_attribute_idx = id;
         if kind != AttributeType::None {
             let pin_idx = self.pins.find_or_create_index(id);
             let pin = &mut self.pins.pool[pin_idx];
@@ -1059,17 +1117,24 @@ impl StyleElement {
     }
 }
 
+/// This controls the modifers needed for certain mouse interactions
 #[derive(Derivative, Debug)]
 #[derivative(Default)]
 pub struct IO {
-    #[derivative(Default(value="Modifiers::Alt"))]
+    /// The Modfier that needs to pressed to pan the editor
+    #[derivative(Default(value="Modifiers::None"))]
     pub emulate_three_button_mouse: Modifiers,
+
+    // The Modifier that needs to be pressed to detatch a link instead of creating a new one
     #[derivative(Default(value="Modifiers::None"))]
     pub link_detatch_with_modifier_click: Modifiers,
+
+    // The mouse button that pans the editor. Should probably not be set to Primary.
     #[derivative(Default(value="Some(egui::PointerButton::Middle)"))]
     pub alt_mouse_button: Option<egui::PointerButton>
 }
 
+/// Used to track which Egui Modifier needs to be pressed for certain IO actions
 #[derive(Debug)]
 pub enum Modifiers {
     Alt,
@@ -1163,16 +1228,20 @@ impl Context {
         }
     }
 
-    fn node_pool_find_or_create_index(&mut self, id: usize) -> usize {
+    fn node_pool_find_or_create_index(&mut self, id: usize, origin: Option<egui::Pos2>) -> usize {
         let index = {
             if let Some(index) = self.nodes.map.get(&id).map(|x| *x) {
                 index
             } else {
+                let mut new_node = NodeData::new(id);
+                if let Some(origin) = origin {
+                    new_node.origin = origin;
+                }
                 let index = if let Some(index) = self.nodes.free.pop() {
-                    self.nodes.pool[index] = NodeData::new(id);
+                    self.nodes.pool[index] = new_node;
                     index
                 } else {
-                    self.nodes.pool.push(NodeData::new(id));
+                    self.nodes.pool.push(new_node);
                     self.nodes.in_use.push(false);
                     self.nodes.pool.len() - 1
                 };
@@ -1180,7 +1249,6 @@ impl Context {
                 self.node_depth_order.push(index);
                 index
             }
-        
         };
         self.nodes.in_use[index] = true;
         index

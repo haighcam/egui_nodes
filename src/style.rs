@@ -1,5 +1,6 @@
 use super::*;
 
+/// Represents different color style values used by a Context
 #[derive(Debug, Clone, Copy)]
 pub enum ColorStyle {
     NodeBackground = 0,
@@ -21,6 +22,7 @@ pub enum ColorStyle {
     Count
 }
 
+/// Represents different style values used by a Context
 #[derive(Debug, Clone, Copy)]
 pub enum StyleVar {
     GridSpacing = 0,
@@ -39,6 +41,7 @@ pub enum StyleVar {
     PinOffset
 }
 
+/// Controls some style aspects
 #[derive(Debug)]
 pub enum StyleFlags {
     None = 0,
@@ -47,6 +50,7 @@ pub enum StyleFlags {
 }
 
 impl ColorStyle {
+    /// dark color style
     pub fn colors_dark() -> [egui::Color32; ColorStyle::Count as usize] {
         let mut colors = [egui::Color32::BLACK; ColorStyle::Count as usize];
         colors[ColorStyle::NodeBackground as usize] = egui::Color32::from_rgba_unmultiplied(50, 50, 50, 255);
@@ -68,6 +72,7 @@ impl ColorStyle {
         colors
     }
 
+    /// classic color style
     pub fn colors_classic() -> [egui::Color32; ColorStyle::Count as usize] {
         let mut colors = [egui::Color32::BLACK; ColorStyle::Count as usize];
         colors[ColorStyle::NodeBackground as usize] = egui::Color32::from_rgba_unmultiplied(50, 50, 50, 255);
@@ -89,7 +94,8 @@ impl ColorStyle {
         colors
     }
 
-    pub fn colors_light() ->[egui::Color32; ColorStyle::Count as usize] {
+    /// light color style
+    pub fn colors_light() -> [egui::Color32; ColorStyle::Count as usize] {
         let mut colors = [egui::Color32::BLACK; ColorStyle::Count as usize];
         colors[ColorStyle::NodeBackground as usize] = egui::Color32::from_rgba_unmultiplied(240, 240, 240, 255);
         colors[ColorStyle::NodeBackgroundHovered as usize] = egui::Color32::from_rgba_unmultiplied(240, 240, 240, 255);
@@ -111,6 +117,12 @@ impl ColorStyle {
     }
 }
 
+/// The style used by a context
+/// Example:
+/// ``` rust
+/// let style = Style { colors: ColorStyle::colors_classic(), ..Default::default() };
+/// let ctx = Context { style, ..Default::default() }
+/// ```
 #[derive(Debug)]
 pub struct Style {
     pub grid_spacing: f32,
@@ -158,7 +170,7 @@ impl Default for Style {
 }
 
 impl Style {
-    pub fn get_screen_space_pin_coordinates(&self, node_rect: &egui::Rect, attribute_rect: &egui::Rect, kind: AttributeType) -> egui::Pos2 {
+    pub (crate) fn get_screen_space_pin_coordinates(&self, node_rect: &egui::Rect, attribute_rect: &egui::Rect, kind: AttributeType) -> egui::Pos2 {
         let x = match kind {
             AttributeType::Input => node_rect.min.x - self.pin_offset,
             _ => node_rect.max.x + self.pin_offset
@@ -166,7 +178,7 @@ impl Style {
         egui::pos2(x, 0.5 * (attribute_rect.min.y + attribute_rect.max.y))
     }
 
-    pub fn draw_pin_shape(&self, pin_pos: egui::Pos2, pin_shape: PinShape, pin_color: egui::Color32, shape: egui::layers::ShapeIdx, ui: &mut egui::Ui) {
+    pub (crate) fn draw_pin_shape(&self, pin_pos: egui::Pos2, pin_shape: PinShape, pin_color: egui::Color32, shape: egui::layers::ShapeIdx, ui: &mut egui::Ui) {
         let painter = ui.painter();
         match pin_shape {
             PinShape::Circle => painter.set(shape, egui::Shape::circle_stroke(pin_pos, self.pin_circle_radius, (self.pin_line_thickness, pin_color))),

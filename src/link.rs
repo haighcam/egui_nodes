@@ -1,6 +1,7 @@
 use derivative::Derivative;
 use super::*;
 
+/// The Color Style of a Link. If feilds are None then the Context style is used
 #[derive(Default, Debug)]
 pub struct LinkArgs {
     pub base: Option<egui::Color32>,
@@ -99,14 +100,14 @@ impl BezierCurve {
 }
 
 #[derive(Debug)]
-pub struct LinkBezierData {
+pub (crate) struct LinkBezierData {
     pub bezier: BezierCurve,
     pub num_segments: usize
 }
 
 impl LinkBezierData {
     #[inline]
-    pub fn get_link_renderable(start: egui::Pos2, end: egui::Pos2, start_type: AttributeType, line_segments_per_length: f32) -> Self {
+    pub (crate) fn get_link_renderable(start: egui::Pos2, end: egui::Pos2, start_type: AttributeType, line_segments_per_length: f32) -> Self {
         let (mut start, mut end) = (start, end);
         if start_type == AttributeType::Input {
             std::mem::swap(&mut start, &mut end);
@@ -125,7 +126,7 @@ impl LinkBezierData {
         }
     }
 
-    pub fn get_closest_point_on_cubic_bezier(&self, p: &egui::Pos2) -> egui::Pos2 {
+    pub (crate) fn get_closest_point_on_cubic_bezier(&self, p: &egui::Pos2) -> egui::Pos2 {
         let mut p_last = self.bezier.0;
         let mut p_closest = self.bezier.0;
         let mut p_closest_dist = f32::MAX;
@@ -144,13 +145,13 @@ impl LinkBezierData {
     }
 
     #[inline]
-    pub fn get_distance_to_cubic_bezier(&self, pos: &egui::Pos2) -> f32 {
+    pub (crate) fn get_distance_to_cubic_bezier(&self, pos: &egui::Pos2) -> f32 {
         let point_on_curve = self.get_closest_point_on_cubic_bezier(pos);
         pos.distance(point_on_curve)
     }
 
     #[inline]
-    pub fn rectangle_overlaps_bezier(&self, rect: &egui::Rect) -> bool {
+    pub (crate) fn rectangle_overlaps_bezier(&self, rect: &egui::Rect) -> bool {
         let mut current = self.bezier.eval(0.0);
         let dt = 1.0 / self.num_segments as f32;
         for i in 0..self.num_segments {
@@ -163,7 +164,7 @@ impl LinkBezierData {
         false
     }
 
-    pub fn draw(&self, stroke: impl Into<egui::Stroke>) -> egui::Shape {
+    pub (crate) fn draw(&self, stroke: impl Into<egui::Stroke>) -> egui::Shape {
         let points = std::iter::once(self.bezier.0)
             .chain((1..self.num_segments).map(|x| self.bezier.eval(x as f32 / self.num_segments as f32)))
             .chain(std::iter::once(self.bezier.3)).collect();
