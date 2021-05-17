@@ -185,8 +185,28 @@ impl Style {
             PinShape::CircleFilled => painter.set(shape, egui::Shape::circle_filled(pin_pos, self.pin_circle_radius, pin_color)),
             PinShape::Quad => painter.set(shape, egui::Shape::rect_stroke(egui::Rect::from_center_size(pin_pos, [self.pin_quad_side_length / 2.0; 2].into()), 0.0, (self.pin_line_thickness, pin_color))),
             PinShape::QuadFilled => painter.set(shape, egui::Shape::rect_filled(egui::Rect::from_center_size(pin_pos, [self.pin_quad_side_length / 2.0; 2].into()), 0.0, pin_color)),
-            PinShape::Triangle => (),
-            PinShape::TriangleFilled => ()
+            PinShape::Triangle => {
+                let sqrt_3 = 3f32.sqrt();
+                let left_offset = -0.1666666666667 * sqrt_3 * self.pin_triangle_side_length;
+                let right_offset = 0.3333333333333 * sqrt_3 * self.pin_triangle_side_length;
+                let verticacl_offset = 0.5 * self.pin_triangle_side_length;
+                painter.set(shape, egui::Shape::closed_line(vec![
+                    pin_pos + (left_offset, verticacl_offset).into(), 
+                    pin_pos + (right_offset, 0.0).into(), 
+                    pin_pos + (left_offset, -verticacl_offset).into()
+                ], (self.pin_line_thickness, pin_color)))
+            },
+            PinShape::TriangleFilled => {
+                let sqrt_3 = 3f32.sqrt();
+                let left_offset = -0.1666666666667 * sqrt_3 * self.pin_triangle_side_length;
+                let right_offset = 0.3333333333333 * sqrt_3 * self.pin_triangle_side_length;
+                let verticacl_offset = 0.5 * self.pin_triangle_side_length;
+                painter.set(shape, egui::Shape::polygon(vec![
+                    pin_pos + (left_offset, verticacl_offset).into(), 
+                    pin_pos + (right_offset, 0.0).into(), 
+                    pin_pos + (left_offset, -verticacl_offset).into()
+                ], pin_color, egui::Stroke::none()))
+            },
         }
     }
 

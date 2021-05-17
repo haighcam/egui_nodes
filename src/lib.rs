@@ -11,14 +11,14 @@
 //!     let nodes = vec![
 //!         NodeConstructor::new(0, Default::default())
 //!             .with_title(|ui| ui.label("Example Node A"))
-//!             .with_input_attribute(0, Defaut::default(), |ui| ui.label("Input"))
+//!             .with_input_attribute(0, Default::default(), |ui| ui.label("Input"))
 //!             .with_static_attribute(1, |ui| ui.label("Can't Connect to Me"))
-//!             .with_output_attribute(2, Defaut::default(), |ui| ui.label("Output")),
+//!             .with_output_attribute(2, Default::default(), |ui| ui.label("Output")),
 //!         NodeConstructor::new(1, Default::default())
 //!             .with_title(|ui| ui.label("Example Node B"))
 //!             .with_static_attribute(3, |ui| ui.label("Can't Connect to Me"))
-//!             .with_output_attribute(4, Defaut::default(), |ui| ui.label("Output"))
-//!             .with_input_attribute(5, Defaut::default(), |ui| ui.label("Input"))
+//!             .with_output_attribute(4, Default::default(), |ui| ui.label("Output"))
+//!             .with_input_attribute(5, Default::default(), |ui| ui.label("Input"))
 //!     ];
 //!     
 //!     ctx.show(
@@ -33,7 +33,7 @@
 //!     }
 //!
 //!     // add created links
-//!     if let Some((start, end, _)) = self.ctx.link_created() {
+//!     if let Some((start, end, _)) = ctx.link_created() {
 //!         links.push((start, end))
 //!     }
 //! }
@@ -441,15 +441,11 @@ impl Context {
 }
 
 impl Context {
-    fn add_node<'a>(&mut self, idx: usize, NodeConstructor{id, title, attributes, mut pos, args}: NodeConstructor<'a>, ui: &mut egui::Ui) {
-        pos = pos.map(|x| self.screen_space_to_grid_space(x));
+    fn add_node<'a>(&mut self, idx: usize, NodeConstructor{id, title, attributes, pos: _, args}: NodeConstructor<'a>, ui: &mut egui::Ui) {
         let node = &mut self.nodes.pool[idx];
         self.style.format_node(node, args);
         node.background_shape.replace(ui.painter().add(egui::Shape::Noop));
         node.id = id;
-        if let Some(pos) = pos {
-            node.origin = pos;
-        }
         let node_origin = node.origin;
         let node_size = node.size;
         let title_space = node.layout_style.padding.y;
@@ -463,20 +459,22 @@ impl Context {
                 title_info.replace((titlebar_shape, title_bar_content_rect));
                 ui.add_space(title_space);
             }
+            let outline_shape = ui.painter().add(egui::Shape::Noop);
             for (id, kind, args, attribute) in attributes {
                 let response = ui.allocate_ui(ui.available_size(), attribute);
                 let shape = ui.painter().add(egui::Shape::Noop);
                 let response = response.response.union(response.inner);
                 self.add_attribute(id, kind, args, response, idx, shape);
             }
-            title_info
+            (title_info, outline_shape)
         });
         let node = &mut self.nodes.pool[idx];
-        if let Some((titlebar_shape, title_bar_content_rect)) = response.inner {
+        let (title_info, outline_shape) = response.inner;
+        if let Some((titlebar_shape, title_bar_content_rect)) = title_info {
             node.titlebar_shape.replace(titlebar_shape);
             node.title_bar_content_rect = title_bar_content_rect;
         }
-        node.outline_shape.replace(ui.painter().add(egui::Shape::Noop));
+        node.outline_shape.replace(outline_shape);
         node.rect = response.response.rect.expand2(node.layout_style.padding);
         if response.response.hovered() {
             self.node_indices_overlapping_with_mouse.push(idx);
@@ -1235,7 +1233,7 @@ impl Context {
             } else {
                 let mut new_node = NodeData::new(id);
                 if let Some(origin) = origin {
-                    new_node.origin = origin;
+                    new_node.origin = self.screen_space_to_grid_space(origin);
                 }
                 let index = if let Some(index) = self.nodes.free.pop() {
                     self.nodes.pool[index] = new_node;

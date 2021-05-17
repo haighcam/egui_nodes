@@ -11,3 +11,6 @@ description = "A Egui port of https://github.com/Nelarius/imnodes"
 [dependencies]
 egui = "0.11"
 derivative = "2.1.1"
+
+[dev-dependencies]
+eframe = "0.11"
