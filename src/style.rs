@@ -201,7 +201,7 @@ impl Style {
                 let left_offset = -0.1666666666667 * sqrt_3 * self.pin_triangle_side_length;
                 let right_offset = 0.3333333333333 * sqrt_3 * self.pin_triangle_side_length;
                 let verticacl_offset = 0.5 * self.pin_triangle_side_length;
-                painter.set(shape, egui::Shape::polygon(vec![
+                painter.set(shape, egui::Shape::convex_polygon(vec![
                     pin_pos + (left_offset, verticacl_offset).into(), 
                     pin_pos + (right_offset, 0.0).into(), 
                     pin_pos + (left_offset, -verticacl_offset).into()
