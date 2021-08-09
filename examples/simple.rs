@@ -45,10 +45,7 @@ pub fn example_graph(ctx: &mut Context, links: &mut Vec<(usize, usize)>, ui: &mu
 
     ctx.show(
         nodes,
-        links
-            .iter()
-            .enumerate()
-            .map(|(i, (start, end))| (i, *start, *end, LinkArgs::default())),
+        links.iter().enumerate().map(|(i, (start, end))| (i, *start, *end, LinkArgs::default())),
         ui,
     );
 

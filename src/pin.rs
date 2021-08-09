@@ -1,15 +1,15 @@
-use derivative::Derivative;
 use super::*;
+use derivative::Derivative;
 
 #[derive(Default, Debug)]
-/// The Visual Style of a Link. 
+/// The Visual Style of a Link.
 /// If feilds are None then the Context style is used.
 /// shape defualts to CircleFilled
 pub struct PinArgs {
     pub shape: PinShape,
     pub flags: Option<usize>,
     pub background: Option<egui::Color32>,
-    pub hovered: Option<egui::Color32>
+    pub hovered: Option<egui::Color32>,
 }
 
 impl PinArgs {
@@ -18,7 +18,7 @@ impl PinArgs {
             shape: PinShape::CircleFilled,
             flags: None,
             background: None,
-            hovered: None
+            hovered: None,
         }
     }
 }
@@ -27,9 +27,13 @@ impl PinArgs {
 pub(crate) enum AttributeType {
     None,
     Input,
-    Output
+    Output,
 }
-impl Default for AttributeType { fn default() -> Self {Self::None}}
+impl Default for AttributeType {
+    fn default() -> Self {
+        Self::None
+    }
+}
 
 /// Controls the shape of an attribut pin.
 /// Triangle and TriangleFilled are not currently implemented and will not be drawn
@@ -40,9 +44,13 @@ pub enum PinShape {
     Triangle,
     TriangleFilled,
     Quad,
-    QuadFilled
+    QuadFilled,
 }
-impl Default for PinShape { fn default() -> Self {Self::CircleFilled}}
+impl Default for PinShape {
+    fn default() -> Self {
+        Self::CircleFilled
+    }
+}
 
 /// Controls the way that attribute pins behave
 #[derive(Debug)]
@@ -54,18 +62,18 @@ pub enum AttributeFlags {
     EnableLinkDetachWithDragClick = 1 << 0,
 
     /// Visual snapping will trigger link creation / destruction
-    EnableLinkCreationOnSnap = 1 << 1
+    EnableLinkCreationOnSnap = 1 << 1,
 }
 
 #[derive(Default, Debug)]
-pub (crate) struct PinDataColorStyle {
+pub(crate) struct PinDataColorStyle {
     pub background: egui::Color32,
-    pub hovered: egui::Color32
+    pub hovered: egui::Color32,
 }
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub (crate) struct PinData {
+pub(crate) struct PinData {
     pub id: usize,
     pub parent_node_idx: usize,
     pub attribute_rect: egui::Rect,
@@ -73,10 +81,10 @@ pub (crate) struct PinData {
     pub shape: PinShape,
     pub pos: egui::Pos2,
     pub flags: usize,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     pub color_style: PinDataColorStyle,
-    #[derivative(Debug="ignore")]
-    pub shape_gui: Option<egui::layers::ShapeIdx>
+    #[derivative(Debug = "ignore")]
+    pub shape_gui: Option<egui::layers::ShapeIdx>,
 }
 
 impl Id for PinData {
@@ -94,7 +102,7 @@ impl Id for PinData {
             pos: Default::default(),
             flags: AttributeFlags::None as usize,
             color_style: Default::default(),
-            shape_gui: None
+            shape_gui: None,
         }
     }
 }
