@@ -60,8 +60,6 @@ pub (crate) struct NodeData {
     pub title_bar_content_rect: egui::Rect,
     pub rect: egui::Rect,
     #[derivative(Debug="ignore")]
-    pub contents: Vec<egui::epaint::ClippedShape>,
-    #[derivative(Debug="ignore")]
     pub color_style: NodeDataColorStyle,
     pub layout_style: NodeDataLayoutStyle,
     pub pin_indices: Vec<usize>,
@@ -82,7 +80,6 @@ impl NodeData {
             size: [100.0; 2].into(),
             title_bar_content_rect: [[0.0; 2].into(); 2].into(),
             rect:  [[0.0; 2].into(); 2].into(),
-            contents: Default::default(),
             color_style: Default::default(),
             layout_style: Default::default(),
             pin_indices: Default::default(),

@@ -187,8 +187,8 @@ impl Style {
             PinShape::QuadFilled => painter.set(shape, egui::Shape::rect_filled(egui::Rect::from_center_size(pin_pos, [self.pin_quad_side_length / 2.0; 2].into()), 0.0, pin_color)),
             PinShape::Triangle => {
                 let sqrt_3 = 3f32.sqrt();
-                let left_offset = -0.1666666666667 * sqrt_3 * self.pin_triangle_side_length;
-                let right_offset = 0.3333333333333 * sqrt_3 * self.pin_triangle_side_length;
+                let left_offset = -0.166_666_7 * sqrt_3 * self.pin_triangle_side_length;
+                let right_offset = 0.333_333_3 * sqrt_3 * self.pin_triangle_side_length;
                 let verticacl_offset = 0.5 * self.pin_triangle_side_length;
                 painter.set(shape, egui::Shape::closed_line(vec![
                     pin_pos + (left_offset, verticacl_offset).into(), 
@@ -198,8 +198,8 @@ impl Style {
             },
             PinShape::TriangleFilled => {
                 let sqrt_3 = 3f32.sqrt();
-                let left_offset = -0.1666666666667 * sqrt_3 * self.pin_triangle_side_length;
-                let right_offset = 0.3333333333333 * sqrt_3 * self.pin_triangle_side_length;
+                let left_offset = -0.166_666_7 * sqrt_3 * self.pin_triangle_side_length;
+                let right_offset = 0.333_333_3 * sqrt_3 * self.pin_triangle_side_length;
                 let verticacl_offset = 0.5 * self.pin_triangle_side_length;
                 painter.set(shape, egui::Shape::convex_polygon(vec![
                     pin_pos + (left_offset, verticacl_offset).into(), 
@@ -219,7 +219,7 @@ impl Style {
         node.color_style.titlebar_hovered = args.titlebar_hovered.unwrap_or(self.colors[ColorStyle::TitleBarHovered as usize]);
         node.color_style.titlebar_selected = args.titlebar_selected.unwrap_or(self.colors[ColorStyle::TitleBarSelected as usize]);
         node.layout_style.corner_rounding = args.corner_rounding.unwrap_or(self.node_corner_rounding);
-        node.layout_style.padding = args.padding.unwrap_or(egui::vec2(self.node_padding_horizontal, self.node_padding_vertical));
+        node.layout_style.padding = args.padding.unwrap_or_else(|| egui::vec2(self.node_padding_horizontal, self.node_padding_vertical));
         node.layout_style.border_thickness = args.border_thickness.unwrap_or(self.node_border_thickness);
     }
 

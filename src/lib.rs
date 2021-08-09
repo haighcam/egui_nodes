@@ -20,7 +20,8 @@
 //!             .with_output_attribute(4, Default::default(), |ui| ui.label("Output"))
 //!             .with_input_attribute(5, Default::default(), |ui| ui.label("Input"))
 //!     ];
-//!     
+//! 
+//!     // add them to the ui
 //!     ctx.show(
 //!         nodes,
 //!         links.iter().enumerate().map(|(i, (start, end))| (i, *start, *end, LinkArgs::default())),
@@ -596,8 +597,8 @@ impl Context {
         for depth_idx in 0..(depth_stack.len() - 1) {
     
             let node_below = &self.nodes.pool[depth_stack[depth_idx]];
-            for next_depth_idx in (depth_idx + 1)..(depth_stack.len()) {
-                let rect_above = self.nodes.pool[depth_stack[next_depth_idx]].rect;
+            for next_depth in &depth_stack[(depth_idx + 1)..(depth_stack.len())] {
+                let rect_above = self.nodes.pool[*next_depth].rect;
                 for idx in node_below.pin_indices.iter() {
                     let pin_pos = self.pins.pool[*idx].pos;
                     if rect_above.contains(pin_pos) {
@@ -685,10 +686,8 @@ impl Context {
         let link_shape = link.shape.take().unwrap();
         let link_hovered = self.hovered_link_idx == Some(link_idx) && self.click_interaction_type != ClickInteractionType::BoxSelection;
 
-        if link_hovered {
-            if self.left_mouse_clicked {
-                self.begin_link_interaction(link_idx);
-            }
+        if link_hovered && self.left_mouse_clicked {
+            self.begin_link_interaction(link_idx);
         }
 
         if self.deleted_link_idx == Some(link_idx) {
@@ -736,10 +735,8 @@ impl Context {
             self.draw_pin(pin_idx, ui);
         }
 
-        if node_hovered {
-            if self.left_mouse_clicked && self.interactive_node_index != Some(node_idx) {
-                self.begin_node_selection(node_idx);
-            }
+        if node_hovered && self.left_mouse_clicked && self.interactive_node_index != Some(node_idx) {
+            self.begin_node_selection(node_idx);
         }
     } 
 
@@ -828,10 +825,8 @@ impl Context {
 
         self.selected_node_indices.clear();
         for (idx, node) in self.nodes.pool.iter().enumerate() {
-            if self.nodes.in_use[idx] {
-                if box_rect.intersects(node.rect) {
-                    self.selected_node_indices.push(idx);
-                }
+            if self.nodes.in_use[idx] && box_rect.intersects(node.rect) {
+                self.selected_node_indices.push(idx);
             }
         }
 
@@ -870,7 +865,7 @@ impl Context {
             }
 
             let link_data = LinkBezierData::get_link_renderable(*start, *end, start_type, self.style.link_line_segments_per_length);
-            return link_data.rectangle_overlaps_bezier(&rect);
+            return link_data.rectangle_overlaps_bezier(rect);
         }
         false
     }
@@ -991,19 +986,17 @@ impl Context {
                 self.begin_link_detach(idx, self.hovered_pin_index.unwrap());
                 self.click_interaction_state.link_creation.link_creation_type = LinkCreationType::FromDetach;
             }
+        } else if self.link_detatch_with_modifier_click {
+            let link = &self.links.pool[idx];
+            let start_pin = &self.pins.pool[link.start_pin_index];
+            let end_pin = &self.pins.pool[link.end_pin_index];
+            let dist_to_start = start_pin.pos.distance(self.mouse_pos);
+            let dist_to_end = end_pin.pos.distance(self.mouse_pos);
+            let closest_pin_idx = if dist_to_start < dist_to_end { link.start_pin_index } else {link.end_pin_index};
+            self.click_interaction_type = ClickInteractionType::LinkCreation;
+            self.begin_link_detach(idx, closest_pin_idx);
         } else {
-            if self.link_detatch_with_modifier_click {
-                let link = &self.links.pool[idx];
-                let start_pin = &self.pins.pool[link.start_pin_index];
-                let end_pin = &self.pins.pool[link.end_pin_index];
-                let dist_to_start = start_pin.pos.distance(self.mouse_pos);
-                let dist_to_end = end_pin.pos.distance(self.mouse_pos);
-                let closest_pin_idx = if dist_to_start < dist_to_end { link.start_pin_index } else {link.end_pin_index};
-                self.click_interaction_type = ClickInteractionType::LinkCreation;
-                self.begin_link_detach(idx, closest_pin_idx);
-            } else {
-                self.begin_link_selection(idx);
-            }
+            self.begin_link_selection(idx);
         }
     }
 
@@ -1169,7 +1162,7 @@ struct ObjectPool<T> {
 
 impl<T> ObjectPool<T> {
     fn find(&self, id: usize) -> Option<usize> {
-        self.map.get(&id).map(|x| *x)
+        self.map.get(&id).copied()
     }
     fn reset(&mut self) {
         self.in_use.iter_mut().for_each(|x| *x = false);
@@ -1189,7 +1182,7 @@ impl<T: Id> ObjectPool<T> {
 
     fn find_or_create_index(&mut self, id: usize) -> usize {
         let index = {
-            if let Some(index) = self.map.get(&id).map(|x| *x) {
+            if let Some(index) = self.find(id) {
                 index
             } else {
                 let index = if let Some(index) = self.free.pop() {
@@ -1228,7 +1221,7 @@ impl Context {
 
     fn node_pool_find_or_create_index(&mut self, id: usize, origin: Option<egui::Pos2>) -> usize {
         let index = {
-            if let Some(index) = self.nodes.map.get(&id).map(|x| *x) {
+            if let Some(index) = self.nodes.find(id) {
                 index
             } else {
                 let mut new_node = NodeData::new(id);

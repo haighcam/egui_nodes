@@ -133,7 +133,7 @@ impl LinkBezierData {
         let t_step = 1.0 / self.num_segments as f32;
         for i in 1..self.num_segments {
             let p_current = self.bezier.eval(t_step * i as f32);
-            let p_line = line_closest_point(&p_last, &p_current, &p);
+            let p_line = line_closest_point(&p_last, &p_current, p);
             let dist = p.distance_sq(p_line);
             if dist < p_closest_dist {
                 p_closest = p_line;
@@ -233,5 +233,5 @@ fn rectangle_overlaps_line_segment(rect: &egui::Rect, p1: &egui::Pos2, p2: &egui
         sum_abs += sign.abs();
     }
 
-    sum.abs() != sum_abs
+    (sum.abs() - sum_abs).abs() < f32::EPSILON
 }
