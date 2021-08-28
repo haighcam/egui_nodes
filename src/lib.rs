@@ -751,7 +751,7 @@ impl Context {
         let pin_hovered = self.hovered_pin_index == Some(pin_idx) && self.click_interaction_type != ClickInteractionType::BoxSelection;
         let pin_shape = pin.shape;
         let pin_pos = pin.pos;
-        let pin_shape_gui = pin.shape_gui.take().unwrap();
+        let pin_shape_gui = pin.shape_gui.take().expect("Unable to take pin shape. Perhaps your pin id is not unique?");
 
         if pin_hovered {
             self.hovered_pin_flags = pin.flags;
