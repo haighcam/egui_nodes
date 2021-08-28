@@ -1,11 +1,14 @@
 //! egui_nodes: A Egui port of [imnodes](https://github.com/Nelarius/imnodes)
-//! 
+//!
 //! # Using egui_nodes
-//! 
+//!
 //! There are some simple examples [here](https://github.com/haighcam/egui_nodes/examples)
-//! 
+//!
 //! Here is the basic usage:
 //! ``` rust
+//! use egui_nodes::{Context, NodeConstructor, LinkArgs};
+//! use egui::Ui;
+//!
 //! pub fn example_graph(ctx: &mut Context, links: &mut Vec<(usize, usize)>, ui: &mut Ui) {
 //!     // add nodes with attributes
 //!     let nodes = vec![
@@ -20,7 +23,7 @@
 //!             .with_output_attribute(4, Default::default(), |ui| ui.label("Output"))
 //!             .with_input_attribute(5, Default::default(), |ui| ui.label("Input"))
 //!     ];
-//! 
+//!
 //!     // add them to the ui
 //!     ctx.show(
 //!         nodes,
@@ -40,24 +43,23 @@
 //! }
 //! ```
 
-
-use std::collections::HashMap;
 use derivative::Derivative;
+use std::collections::HashMap;
 
-mod style;
-mod node;
 mod link;
+mod node;
 mod pin;
+mod style;
 
-use node::*;
 use link::*;
+use node::*;
 use pin::*;
 
 pub use {
-    pin::{PinShape, AttributeFlags, PinArgs},
-    style::{StyleFlags, StyleVar, ColorStyle, Style},
-    node::{NodeConstructor, NodeArgs},
-    link::LinkArgs
+    link::LinkArgs,
+    node::{NodeArgs, NodeConstructor},
+    pin::{AttributeFlags, PinArgs, PinShape},
+    style::{ColorStyle, Style, StyleFlags, StyleVar},
 };
 
 /// The Context that tracks the state of the node editor
@@ -69,18 +71,18 @@ pub struct Context {
     occluded_pin_indices: Vec<usize>,
 
     canvas_origin_screen_space: egui::Vec2,
-    #[derivative(Default(value="[[0.0; 2].into(); 2].into()"))]
+    #[derivative(Default(value = "[[0.0; 2].into(); 2].into()"))]
     canvas_rect_screen_space: egui::Rect,
 
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     pub io: IO,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     pub style: Style,
     color_modifier_stack: Vec<ColorStyleElement>,
     style_modifier_stack: Vec<StyleElement>,
     text_buffer: String,
 
-    current_attribute_flags: usize, 
+    current_attribute_flags: usize,
     attribute_flag_stack: Vec<usize>,
 
     hovered_node_index: Option<usize>,
@@ -122,14 +124,19 @@ pub struct Context {
     selected_node_indices: Vec<usize>,
     selected_link_indices: Vec<usize>,
 
-    #[derivative(Default(value="ClickInteractionType::None"))]
+    #[derivative(Default(value = "ClickInteractionType::None"))]
     click_interaction_type: ClickInteractionType,
-    click_interaction_state: ClickInteractionState
+    click_interaction_state: ClickInteractionState,
 }
 
 impl Context {
     /// Displays the current state of the editor on a give Egui Ui as well as updating user input to the context
-    pub fn show<'a>(&mut self, nodes: impl IntoIterator<Item=NodeConstructor<'a>>, links: impl IntoIterator<Item=(usize, usize, usize, LinkArgs)>, ui: &mut egui::Ui) -> egui::Response {
+    pub fn show<'a>(
+        &mut self,
+        nodes: impl IntoIterator<Item = NodeConstructor<'a>>,
+        links: impl IntoIterator<Item = (usize, usize, usize, LinkArgs)>,
+        ui: &mut egui::Ui,
+    ) -> egui::Response {
         let rect = ui.available_rect_before_wrap_finite();
         self.canvas_rect_screen_space = rect;
         self.canvas_origin_screen_space = self.canvas_rect_screen_space.min.to_vec2();
@@ -150,14 +157,23 @@ impl Context {
 
             self.active_attribute = false;
         }
-        
+
         {
             ui.set_min_size(self.canvas_rect_screen_space.size());
-            let mut ui = ui.child_ui(self.canvas_rect_screen_space, egui::Layout::top_down(egui::Align::Center));
+            let mut ui = ui.child_ui(
+                self.canvas_rect_screen_space,
+                egui::Layout::top_down(egui::Align::Center),
+            );
             {
                 let ui = &mut ui;
-                ui.set_clip_rect(self.canvas_rect_screen_space.intersect(ui.ctx().input().screen_rect()));
-                ui.painter().rect_filled(self.canvas_rect_screen_space, 0.0, self.style.colors[ColorStyle::GridBackground as usize]);
+                ui.set_clip_rect(
+                    self.canvas_rect_screen_space.intersect(ui.ctx().input().screen_rect()),
+                );
+                ui.painter().rect_filled(
+                    self.canvas_rect_screen_space,
+                    0.0,
+                    self.style.colors[ColorStyle::GridBackground as usize],
+                );
 
                 if (self.style.flags & StyleFlags::GridLines as usize) != 0 {
                     self.draw_grid(self.canvas_rect_screen_space.size(), ui);
@@ -168,14 +184,21 @@ impl Context {
                     self.add_link(id, start, end, args, ui);
                 }
 
-                let mut nodes = nodes.into_iter().map(|x| (self.node_pool_find_or_create_index(x.id, x.pos), x)).collect::<HashMap<_, _>>();
+                let mut nodes = nodes
+                    .into_iter()
+                    .map(|x| (self.node_pool_find_or_create_index(x.id, x.pos), x))
+                    .collect::<HashMap<_, _>>();
                 for idx in self.node_depth_order.clone() {
                     if let Some(node_builder) = nodes.remove(&idx) {
                         self.add_node(idx, node_builder, ui);
                     }
                 }
             }
-            let response = ui.interact(self.canvas_rect_screen_space, ui.id().with("Input"), egui::Sense::click_and_drag());
+            let response = ui.interact(
+                self.canvas_rect_screen_space,
+                ui.id().with("Input"),
+                egui::Sense::click_and_drag(),
+            );
             {
                 let io = ui.ctx().input();
                 let mouse_pos = if let Some(mouse_pos) = response.hover_pos() {
@@ -188,32 +211,37 @@ impl Context {
                 self.mouse_delta = mouse_pos - self.mouse_pos;
                 self.mouse_pos = mouse_pos;
                 let left_mouse_clicked = io.pointer.button_down(egui::PointerButton::Primary);
-                self.left_mouse_released = (self.left_mouse_clicked || self.left_mouse_dragging) && !left_mouse_clicked;
-                self.left_mouse_dragging = (self.left_mouse_clicked || self.left_mouse_dragging) && left_mouse_clicked;
-                self.left_mouse_clicked = left_mouse_clicked && !(self.left_mouse_clicked || self.left_mouse_dragging);
+                self.left_mouse_released =
+                    (self.left_mouse_clicked || self.left_mouse_dragging) && !left_mouse_clicked;
+                self.left_mouse_dragging =
+                    (self.left_mouse_clicked || self.left_mouse_dragging) && left_mouse_clicked;
+                self.left_mouse_clicked =
+                    left_mouse_clicked && !(self.left_mouse_clicked || self.left_mouse_dragging);
 
-                let alt_mouse_clicked = 
-                    self.io.emulate_three_button_mouse.is_active(&io.modifiers) ||
-                    self.io.alt_mouse_button.map_or(false, |x| io.pointer.button_down(x));
-                self.alt_mouse_dragging = (self.alt_mouse_clicked || self.alt_mouse_dragging) && alt_mouse_clicked;
-                self.alt_mouse_clicked = alt_mouse_clicked && !(self.alt_mouse_clicked || self.alt_mouse_dragging);
-                self.link_detatch_with_modifier_click = self.io.link_detatch_with_modifier_click.is_active(&io.modifiers);
+                let alt_mouse_clicked = self.io.emulate_three_button_mouse.is_active(&io.modifiers)
+                    || self.io.alt_mouse_button.map_or(false, |x| io.pointer.button_down(x));
+                self.alt_mouse_dragging =
+                    (self.alt_mouse_clicked || self.alt_mouse_dragging) && alt_mouse_clicked;
+                self.alt_mouse_clicked =
+                    alt_mouse_clicked && !(self.alt_mouse_clicked || self.alt_mouse_dragging);
+                self.link_detatch_with_modifier_click =
+                    self.io.link_detatch_with_modifier_click.is_active(&io.modifiers);
             }
             {
                 let ui = &mut ui;
                 if self.mouse_in_canvas {
                     self.resolve_occluded_pins();
                     self.resolve_hovered_pin();
-                    
+
                     if self.hovered_pin_index.is_none() {
                         self.resolve_hovered_node();
                     }
-        
+
                     if self.hovered_node_index.is_none() {
                         self.resolve_hovered_link();
                     }
                 }
-                
+
                 for node_idx in self.node_depth_order.clone() {
                     if self.nodes.in_use[node_idx] {
                         self.draw_node(node_idx, ui);
@@ -229,19 +257,23 @@ impl Context {
                 if self.left_mouse_clicked || self.alt_mouse_clicked {
                     self.begin_canvas_interaction();
                 }
-        
+
                 self.click_interaction_update(ui);
-        
+
                 self.node_pool_update();
                 self.pins.update();
                 self.links.update();
             }
-            ui.painter().rect_stroke(self.canvas_rect_screen_space, 0.0, (1.0, self.style.colors[ColorStyle::GridLine as usize]));
+            ui.painter().rect_stroke(
+                self.canvas_rect_screen_space,
+                0.0,
+                (1.0, self.style.colors[ColorStyle::GridLine as usize]),
+            );
             response
         }
     }
-    
-    /// Push a sigle AttributeFlags value, by default only None is set. 
+
+    /// Push a sigle AttributeFlags value, by default only None is set.
     /// Used for pins that don't have a specific attribute flag specified
     pub fn attribute_flag_push(&mut self, flag: AttributeFlags) {
         self.attribute_flag_stack.push(self.current_attribute_flags);
@@ -257,7 +289,10 @@ impl Context {
 
     /// Changes the current colors used by the editor
     pub fn color_style_push(&mut self, item: ColorStyle, color: egui::Color32) {
-        self.color_modifier_stack.push(ColorStyleElement::new(self.style.colors[item as usize], item));
+        self.color_modifier_stack.push(ColorStyleElement::new(
+            self.style.colors[item as usize],
+            item,
+        ));
         self.style.colors[item as usize] = color;
     }
 
@@ -371,8 +406,11 @@ impl Context {
 
     /// Has a link been dropped? if including_detached_links then links that were detached then dropped are included
     pub fn link_dropped(&self, including_detached_links: bool) -> Option<usize> {
-        if (self.element_state_change & ElementStateChange::LinkDropped as usize) != 0 &&
-            (including_detached_links || self.click_interaction_state.link_creation.link_creation_type != LinkCreationType::FromDetach) {
+        if (self.element_state_change & ElementStateChange::LinkDropped as usize) != 0
+            && (including_detached_links
+                || self.click_interaction_state.link_creation.link_creation_type
+                    != LinkCreationType::FromDetach)
+        {
             Some(self.pins.pool[self.click_interaction_state.link_creation.start_pin_idx].id)
         } else {
             None
@@ -384,15 +422,18 @@ impl Context {
     pub fn link_created(&self) -> Option<(usize, usize, bool)> {
         if (self.element_state_change & ElementStateChange::LinkCreated as usize) != 0 {
             let (start_pin_id, end_pin_id) = {
-                let start_pin = &self.pins.pool[self.click_interaction_state.link_creation.start_pin_idx];
-                let end_pin = &self.pins.pool[self.click_interaction_state.link_creation.end_pin_index.unwrap()];
+                let start_pin =
+                    &self.pins.pool[self.click_interaction_state.link_creation.start_pin_idx];
+                let end_pin = &self.pins.pool
+                    [self.click_interaction_state.link_creation.end_pin_index.unwrap()];
                 if start_pin.kind == AttributeType::Output {
                     (start_pin.id, end_pin.id)
                 } else {
                     (end_pin.id, start_pin.id)
                 }
             };
-            let created_from_snap = self.click_interaction_type == ClickInteractionType::LinkCreation;
+            let created_from_snap =
+                self.click_interaction_type == ClickInteractionType::LinkCreation;
             Some((start_pin_id, end_pin_id, created_from_snap))
         } else {
             None
@@ -401,11 +442,13 @@ impl Context {
 
     /// Has a new link been created? Includes start and end node
     /// -> Option<start_pin, start_node, end_pin, end_node created_from_snap>
-    pub fn link_created_node(&self) -> Option<(usize, usize, usize, usize, bool)> { 
+    pub fn link_created_node(&self) -> Option<(usize, usize, usize, usize, bool)> {
         if (self.element_state_change & ElementStateChange::LinkCreated as usize) != 0 {
             let (start_pin_id, start_node_id, end_pin_id, end_node_id) = {
-                let start_pin = &self.pins.pool[self.click_interaction_state.link_creation.start_pin_idx];
-                let end_pin = &self.pins.pool[self.click_interaction_state.link_creation.end_pin_index.unwrap()];
+                let start_pin =
+                    &self.pins.pool[self.click_interaction_state.link_creation.start_pin_idx];
+                let end_pin = &self.pins.pool
+                    [self.click_interaction_state.link_creation.end_pin_index.unwrap()];
                 let start_node = &self.nodes.pool[start_pin.parent_node_idx];
                 let end_node = &self.nodes.pool[end_pin.parent_node_idx];
                 if start_pin.kind == AttributeType::Output {
@@ -414,8 +457,15 @@ impl Context {
                     (end_pin.id, end_node.id, start_pin.id, start_node.id)
                 }
             };
-            let created_from_snap = self.click_interaction_type == ClickInteractionType::LinkCreation;
-            Some((start_pin_id, start_node_id, end_pin_id, end_node_id, created_from_snap))
+            let created_from_snap =
+                self.click_interaction_type == ClickInteractionType::LinkCreation;
+            Some((
+                start_pin_id,
+                start_node_id,
+                end_pin_id,
+                end_node_id,
+                created_from_snap,
+            ))
         } else {
             None
         }
@@ -435,14 +485,23 @@ impl Context {
     }
 
     pub fn get_node_dimensions(&self, id: usize) -> Option<egui::Vec2> {
-        self.nodes.find(id).map(|x| {
-            self.nodes.pool[x].rect.size()
-        })
+        self.nodes.find(id).map(|x| self.nodes.pool[x].rect.size())
     }
 }
 
 impl Context {
-    fn add_node<'a>(&mut self, idx: usize, NodeConstructor{id, title, attributes, pos: _, args}: NodeConstructor<'a>, ui: &mut egui::Ui) {
+    fn add_node<'a>(
+        &mut self,
+        idx: usize,
+        NodeConstructor {
+            id,
+            title,
+            attributes,
+            pos: _,
+            args,
+        }: NodeConstructor<'a>,
+        ui: &mut egui::Ui,
+    ) {
         let node = &mut self.nodes.pool[idx];
         self.style.format_node(node, args);
         node.background_shape.replace(ui.painter().add(egui::Shape::Noop));
@@ -450,25 +509,28 @@ impl Context {
         let node_origin = node.origin;
         let node_size = node.size;
         let title_space = node.layout_style.padding.y;
-        
-        let response = ui.allocate_ui_at_rect(egui::Rect::from_min_size(self.grid_space_to_screen_space(node_origin), node_size), |ui| {
-            let mut title_info = None;
-            if let Some(title) = title {
-                let titlebar_shape = ui.painter().add(egui::Shape::Noop);
-                let response = ui.allocate_ui(ui.available_size(), title);
-                let title_bar_content_rect = response.response.rect;
-                title_info.replace((titlebar_shape, title_bar_content_rect));
-                ui.add_space(title_space);
-            }
-            let outline_shape = ui.painter().add(egui::Shape::Noop);
-            for (id, kind, args, attribute) in attributes {
-                let response = ui.allocate_ui(ui.available_size(), attribute);
-                let shape = ui.painter().add(egui::Shape::Noop);
-                let response = response.response.union(response.inner);
-                self.add_attribute(id, kind, args, response, idx, shape);
-            }
-            (title_info, outline_shape)
-        });
+
+        let response = ui.allocate_ui_at_rect(
+            egui::Rect::from_min_size(self.grid_space_to_screen_space(node_origin), node_size),
+            |ui| {
+                let mut title_info = None;
+                if let Some(title) = title {
+                    let titlebar_shape = ui.painter().add(egui::Shape::Noop);
+                    let response = ui.allocate_ui(ui.available_size(), title);
+                    let title_bar_content_rect = response.response.rect;
+                    title_info.replace((titlebar_shape, title_bar_content_rect));
+                    ui.add_space(title_space);
+                }
+                let outline_shape = ui.painter().add(egui::Shape::Noop);
+                for (id, kind, args, attribute) in attributes {
+                    let response = ui.allocate_ui(ui.available_size(), attribute);
+                    let shape = ui.painter().add(egui::Shape::Noop);
+                    let response = response.response.union(response.inner);
+                    self.add_attribute(id, kind, args, response, idx, shape);
+                }
+                (title_info, outline_shape)
+            },
+        );
         let node = &mut self.nodes.pool[idx];
         let (title_info, outline_shape) = response.inner;
         if let Some((titlebar_shape, title_bar_content_rect)) = title_info {
@@ -482,7 +544,15 @@ impl Context {
         }
     }
 
-    fn add_attribute(&mut self, id: usize, kind: AttributeType, args: PinArgs, response: egui::Response, node_idx: usize, shape: egui::layers::ShapeIdx) {
+    fn add_attribute(
+        &mut self,
+        id: usize,
+        kind: AttributeType,
+        args: PinArgs,
+        response: egui::Response,
+        node_idx: usize,
+        shape: egui::layers::ShapeIdx,
+    ) {
         if kind != AttributeType::None {
             let pin_idx = self.pins.find_or_create_index(id);
             let pin = &mut self.pins.pool[pin_idx];
@@ -502,7 +572,14 @@ impl Context {
         }
     }
 
-    fn add_link(&mut self, id: usize, start_attr_id: usize, end_attr_id: usize, args: LinkArgs, ui: &mut egui::Ui) {
+    fn add_link(
+        &mut self,
+        id: usize,
+        start_attr_id: usize,
+        end_attr_id: usize,
+        args: LinkArgs,
+        ui: &mut egui::Ui,
+    ) {
         let link_idx = self.links.find_or_create_index(id);
         let link = &mut self.links.pool[link_idx];
         link.id = id;
@@ -511,12 +588,16 @@ impl Context {
         link.shape.replace(ui.painter().add(egui::Shape::Noop));
         self.style.format_link(link, args);
 
-        if (self.click_interaction_type == ClickInteractionType::LinkCreation && 
-            (self.pins.pool[link.end_pin_index].flags & AttributeFlags::EnableLinkCreationOnSnap as usize) != 0 &&
-            self.click_interaction_state.link_creation.start_pin_idx == link.start_pin_index &&
-            self.click_interaction_state.link_creation.end_pin_index == Some(link.end_pin_index)) ||
-            (self.click_interaction_state.link_creation.start_pin_idx == link.end_pin_index &&
-            self.click_interaction_state.link_creation.end_pin_index == Some(link.start_pin_index)) {
+        if (self.click_interaction_type == ClickInteractionType::LinkCreation
+            && (self.pins.pool[link.end_pin_index].flags
+                & AttributeFlags::EnableLinkCreationOnSnap as usize)
+                != 0
+            && self.click_interaction_state.link_creation.start_pin_idx == link.start_pin_index
+            && self.click_interaction_state.link_creation.end_pin_index == Some(link.end_pin_index))
+            || (self.click_interaction_state.link_creation.start_pin_idx == link.end_pin_index
+                && self.click_interaction_state.link_creation.end_pin_index
+                    == Some(link.start_pin_index))
+        {
             self.snap_link_idx.replace(link_idx);
         }
     }
@@ -536,27 +617,31 @@ impl Context {
             StyleVar::PinTriangleSideLength => &mut self.style.pin_triangle_side_length,
             StyleVar::PinLineThickness => &mut self.style.pin_line_thickness,
             StyleVar::PinHoverRadius => &mut self.style.pin_hover_radius,
-            StyleVar::PinOffset => &mut self.style.pin_offset
+            StyleVar::PinOffset => &mut self.style.pin_offset,
         }
     }
 
     fn draw_grid(&self, canvas_size: egui::Vec2, ui: &mut egui::Ui) {
         let mut x = self.panning.x.rem_euclid(self.style.grid_spacing);
         while x < canvas_size.x {
-            ui.painter().line_segment([
-                self.editor_space_to_screen_space([x, 0.0].into()), 
-                self.editor_space_to_screen_space([x, canvas_size.y].into())], 
-                (1.0, self.style.colors[ColorStyle::GridLine as usize])
+            ui.painter().line_segment(
+                [
+                    self.editor_space_to_screen_space([x, 0.0].into()),
+                    self.editor_space_to_screen_space([x, canvas_size.y].into()),
+                ],
+                (1.0, self.style.colors[ColorStyle::GridLine as usize]),
             );
             x += self.style.grid_spacing;
         }
 
         let mut y = self.panning.y.rem_euclid(self.style.grid_spacing);
         while y < canvas_size.y {
-            ui.painter().line_segment([
-                self.editor_space_to_screen_space([0.0, y].into()), 
-                self.editor_space_to_screen_space([canvas_size.x, y].into())], 
-                (1.0, self.style.colors[ColorStyle::GridLine as usize])
+            ui.painter().line_segment(
+                [
+                    self.editor_space_to_screen_space([0.0, y].into()),
+                    self.editor_space_to_screen_space([canvas_size.x, y].into()),
+                ],
+                (1.0, self.style.colors[ColorStyle::GridLine as usize]),
             );
             y += self.style.grid_spacing;
         }
@@ -584,18 +669,21 @@ impl Context {
 
     fn get_screen_space_pin_coordinates(&self, pin: &PinData) -> egui::Pos2 {
         let parent_node_rect = self.nodes.pool[pin.parent_node_idx].rect;
-        self.style.get_screen_space_pin_coordinates(&parent_node_rect, &pin.attribute_rect, pin.kind)
+        self.style.get_screen_space_pin_coordinates(
+            &parent_node_rect,
+            &pin.attribute_rect,
+            pin.kind,
+        )
     }
 
     fn resolve_occluded_pins(&mut self) {
         self.occluded_pin_indices.clear();
         let depth_stack = &self.node_depth_order;
         if depth_stack.len() < 2 {
-            return
+            return;
         }
 
         for depth_idx in 0..(depth_stack.len() - 1) {
-    
             let node_below = &self.nodes.pool[depth_stack[depth_idx]];
             for next_depth in &depth_stack[(depth_idx + 1)..(depth_stack.len())] {
                 let rect_above = self.nodes.pool[*next_depth].rect;
@@ -630,8 +718,12 @@ impl Context {
 
     fn resolve_hovered_node(&mut self) {
         match self.node_indices_overlapping_with_mouse.len() {
-            0 => {self.hovered_node_index.take();},
-            1 => {self.hovered_node_index.replace(self.node_indices_overlapping_with_mouse[0]);},
+            0 => {
+                self.hovered_node_index.take();
+            }
+            1 => {
+                self.hovered_node_index.replace(self.node_indices_overlapping_with_mouse[0]);
+            }
             _ => {
                 let mut largest_depth_idx = -1;
 
@@ -657,7 +749,9 @@ impl Context {
             }
 
             let link = &self.links.pool[idx];
-            if self.hovered_pin_index == Some(link.start_pin_index) || self.hovered_pin_index == Some(link.end_pin_index) {
+            if self.hovered_pin_index == Some(link.start_pin_index)
+                || self.hovered_pin_index == Some(link.end_pin_index)
+            {
                 self.hovered_link_idx.replace(idx);
                 return;
             }
@@ -665,8 +759,15 @@ impl Context {
             let start_pin = &self.pins.pool[link.start_pin_index];
             let end_pin = &self.pins.pool[link.end_pin_index];
 
-            let link_data = LinkBezierData::get_link_renderable(start_pin.pos, end_pin.pos, start_pin.kind, self.style.link_line_segments_per_length);
-            let link_rect = link_data.bezier.get_containing_rect_for_bezier_curve(self.style.link_hover_distance);
+            let link_data = LinkBezierData::get_link_renderable(
+                start_pin.pos,
+                end_pin.pos,
+                start_pin.kind,
+                self.style.link_line_segments_per_length,
+            );
+            let link_rect = link_data
+                .bezier
+                .get_containing_rect_for_bezier_curve(self.style.link_hover_distance);
 
             if link_rect.contains(self.mouse_pos) {
                 let distance = link_data.get_distance_to_cubic_bezier(&self.mouse_pos);
@@ -682,9 +783,15 @@ impl Context {
         let link = &mut self.links.pool[link_idx];
         let start_pin = &self.pins.pool[link.start_pin_index];
         let end_pin = &self.pins.pool[link.end_pin_index];
-        let link_data = LinkBezierData::get_link_renderable(start_pin.pos, end_pin.pos, start_pin.kind, self.style.link_line_segments_per_length);
+        let link_data = LinkBezierData::get_link_renderable(
+            start_pin.pos,
+            end_pin.pos,
+            start_pin.kind,
+            self.style.link_line_segments_per_length,
+        );
         let link_shape = link.shape.take().unwrap();
-        let link_hovered = self.hovered_link_idx == Some(link_idx) && self.click_interaction_type != ClickInteractionType::BoxSelection;
+        let link_hovered = self.hovered_link_idx == Some(link_idx)
+            && self.click_interaction_type != ClickInteractionType::BoxSelection;
 
         if link_hovered && self.left_mouse_clicked {
             self.begin_link_interaction(link_idx);
@@ -702,14 +809,18 @@ impl Context {
             link_color = link.color_style.hovered;
         }
 
-        ui.painter().set(link_shape, link_data.draw((self.style.link_thickness, link_color)));
+        ui.painter().set(
+            link_shape,
+            link_data.draw((self.style.link_thickness, link_color)),
+        );
     }
 
     fn draw_node(&mut self, node_idx: usize, ui: &mut egui::Ui) {
         let node = &mut self.nodes.pool[node_idx];
 
-        let node_hovered = self.hovered_node_index == Some(node_idx) && self.click_interaction_type != ClickInteractionType::BoxSelection;
-        
+        let node_hovered = self.hovered_node_index == Some(node_idx)
+            && self.click_interaction_type != ClickInteractionType::BoxSelection;
+
         let mut node_background = node.color_style.background;
         let mut titlebar_background = node.color_style.titlebar;
 
@@ -723,35 +834,65 @@ impl Context {
 
         let painter = ui.painter();
 
-        painter.set(node.background_shape.take().unwrap(), egui::Shape::rect_filled(node.rect, node.layout_style.corner_rounding, node_background));
+        painter.set(
+            node.background_shape.take().unwrap(),
+            egui::Shape::rect_filled(
+                node.rect,
+                node.layout_style.corner_rounding,
+                node_background,
+            ),
+        );
         if node.title_bar_content_rect.height() > 0.0 {
-            painter.set(node.titlebar_shape.take().unwrap(), egui::Shape::rect_filled(node.get_node_title_rect(), node.layout_style.corner_rounding, titlebar_background));
+            painter.set(
+                node.titlebar_shape.take().unwrap(),
+                egui::Shape::rect_filled(
+                    node.get_node_title_rect(),
+                    node.layout_style.corner_rounding,
+                    titlebar_background,
+                ),
+            );
         }
         if (self.style.flags & StyleFlags::NodeOutline as usize) != 0 {
-            painter.set(node.outline_shape.take().unwrap(), egui::Shape::rect_stroke(node.rect, node.layout_style.corner_rounding, (node.layout_style.border_thickness, node.color_style.outline)));
+            painter.set(
+                node.outline_shape.take().unwrap(),
+                egui::Shape::rect_stroke(
+                    node.rect,
+                    node.layout_style.corner_rounding,
+                    (node.layout_style.border_thickness, node.color_style.outline),
+                ),
+            );
         }
 
         for pin_idx in node.pin_indices.clone() {
             self.draw_pin(pin_idx, ui);
         }
 
-        if node_hovered && self.left_mouse_clicked && self.interactive_node_index != Some(node_idx) {
+        if node_hovered && self.left_mouse_clicked && self.interactive_node_index != Some(node_idx)
+        {
             self.begin_node_selection(node_idx);
         }
-    } 
+    }
 
     fn draw_pin(&mut self, pin_idx: usize, ui: &mut egui::Ui) {
         let pin = &mut self.pins.pool[pin_idx];
         let parent_node_rect = self.nodes.pool[pin.parent_node_idx].rect;
 
-        pin.pos = self.style.get_screen_space_pin_coordinates(&parent_node_rect, &pin.attribute_rect, pin.kind);
+        pin.pos = self.style.get_screen_space_pin_coordinates(
+            &parent_node_rect,
+            &pin.attribute_rect,
+            pin.kind,
+        );
 
         let mut pin_color = pin.color_style.background;
 
-        let pin_hovered = self.hovered_pin_index == Some(pin_idx) && self.click_interaction_type != ClickInteractionType::BoxSelection;
+        let pin_hovered = self.hovered_pin_index == Some(pin_idx)
+            && self.click_interaction_type != ClickInteractionType::BoxSelection;
         let pin_shape = pin.shape;
         let pin_pos = pin.pos;
-        let pin_shape_gui = pin.shape_gui.take().expect("Unable to take pin shape. Perhaps your pin id is not unique?");
+        let pin_shape_gui = pin
+            .shape_gui
+            .take()
+            .expect("Unable to take pin shape. Perhaps your pin id is not unique?");
 
         if pin_hovered {
             self.hovered_pin_flags = pin.flags;
@@ -766,13 +907,16 @@ impl Context {
     }
 
     fn begin_canvas_interaction(&mut self) {
-        let any_ui_element_hovered = self.hovered_node_index.is_some() || 
-            self.hovered_link_idx.is_some() || 
-            self.hovered_pin_index.is_some();
+        let any_ui_element_hovered = self.hovered_node_index.is_some()
+            || self.hovered_link_idx.is_some()
+            || self.hovered_pin_index.is_some();
 
         let mouse_not_in_canvas = !self.mouse_in_canvas;
 
-        if self.click_interaction_type != ClickInteractionType::None || any_ui_element_hovered || mouse_not_in_canvas {
+        if self.click_interaction_type != ClickInteractionType::None
+            || any_ui_element_hovered
+            || mouse_not_in_canvas
+        {
             return;
         }
 
@@ -783,7 +927,6 @@ impl Context {
             self.click_interaction_state.box_selection.min = self.mouse_pos;
         }
     }
-
 
     fn translate_selected_nodes(&mut self) {
         if self.left_mouse_dragging {
@@ -797,7 +940,12 @@ impl Context {
         }
     }
 
-    fn should_link_snap_to_pin(&self, start_pin: &PinData, hovered_pin_idx: usize, duplicate_link: Option<usize>) -> bool {
+    fn should_link_snap_to_pin(
+        &self,
+        start_pin: &PinData,
+        hovered_pin_idx: usize,
+        duplicate_link: Option<usize>,
+    ) -> bool {
         let end_pin = &self.pins.pool[hovered_pin_idx];
         if start_pin.parent_node_idx == end_pin.parent_node_idx {
             return false;
@@ -818,7 +966,7 @@ impl Context {
         if box_rect.min.x > box_rect.max.x {
             std::mem::swap(&mut box_rect.min.x, &mut box_rect.max.x);
         }
-    
+
         if box_rect.min.y > box_rect.max.y {
             std::mem::swap(&mut box_rect.min.y, &mut box_rect.max.y);
         }
@@ -837,8 +985,16 @@ impl Context {
                 let pin_end = &self.pins.pool[link.end_pin_index];
                 let node_start_rect = self.nodes.pool[pin_start.parent_node_idx].rect;
                 let node_end_rect = self.nodes.pool[pin_end.parent_node_idx].rect;
-                let start = self.style.get_screen_space_pin_coordinates(&node_start_rect, &pin_start.attribute_rect, pin_start.kind);
-                let end = self.style.get_screen_space_pin_coordinates(&node_end_rect, &pin_end.attribute_rect, pin_end.kind);
+                let start = self.style.get_screen_space_pin_coordinates(
+                    &node_start_rect,
+                    &pin_start.attribute_rect,
+                    pin_start.kind,
+                );
+                let end = self.style.get_screen_space_pin_coordinates(
+                    &node_end_rect,
+                    &pin_end.attribute_rect,
+                    pin_end.kind,
+                );
 
                 if self.rectangle_overlaps_link(&box_rect, &start, &end, pin_start.kind) {
                     self.selected_link_indices.push(idx);
@@ -849,7 +1005,13 @@ impl Context {
     }
 
     #[inline]
-    fn rectangle_overlaps_link(&self, rect: &egui::Rect, start: &egui::Pos2, end: &egui::Pos2, start_type: AttributeType) -> bool {
+    fn rectangle_overlaps_link(
+        &self,
+        rect: &egui::Rect,
+        start: &egui::Pos2,
+        end: &egui::Pos2,
+        start_type: AttributeType,
+    ) -> bool {
         let mut lrect = egui::Rect::from_min_max(*start, *end);
         if lrect.min.x > lrect.max.x {
             std::mem::swap(&mut lrect.min.x, &mut lrect.max.x);
@@ -864,7 +1026,12 @@ impl Context {
                 return true;
             }
 
-            let link_data = LinkBezierData::get_link_renderable(*start, *end, start_type, self.style.link_line_segments_per_length);
+            let link_data = LinkBezierData::get_link_renderable(
+                *start,
+                *end,
+                start_type,
+                self.style.link_line_segments_per_length,
+            );
             return link_data.rectangle_overlaps_bezier(rect);
         }
         false
@@ -877,7 +1044,8 @@ impl Context {
                 let rect = self.box_selector_update_selection();
 
                 let box_selector_color = self.style.colors[ColorStyle::BoxSelector as usize];
-                let box_selector_outline = self.style.colors[ColorStyle::BoxSelectorOutline as usize];
+                let box_selector_outline =
+                    self.style.colors[ColorStyle::BoxSelectorOutline as usize];
                 ui.painter().rect(rect, 0.0, box_selector_color, (1.0, box_selector_outline));
 
                 if self.left_mouse_released {
@@ -888,67 +1056,97 @@ impl Context {
                         if selected_nodes.contains(x) {
                             idxs.push(*x);
                             false
-                        } else { true }
+                        } else {
+                            true
+                        }
                     });
                     self.node_depth_order.extend(idxs);
                     self.click_interaction_type = ClickInteractionType::None;
                 }
-            },
+            }
             ClickInteractionType::Node => {
                 self.translate_selected_nodes();
                 if self.left_mouse_released {
                     self.click_interaction_type = ClickInteractionType::None;
                 }
-            },
+            }
             ClickInteractionType::Link => {
                 if self.left_mouse_released {
                     self.click_interaction_type = ClickInteractionType::None;
                 }
-            },
+            }
             ClickInteractionType::LinkCreation => {
                 let maybe_duplicate_link_idx = self.hovered_pin_index.and_then(|idx| {
-                    self.find_duplicate_link(self.click_interaction_state.link_creation.start_pin_idx, idx)
+                    self.find_duplicate_link(
+                        self.click_interaction_state.link_creation.start_pin_idx,
+                        idx,
+                    )
                 });
 
                 let should_snap = self.hovered_pin_index.map_or(false, |idx| {
-                    let start_pin = &self.pins.pool[self.click_interaction_state.link_creation.start_pin_idx];
+                    let start_pin =
+                        &self.pins.pool[self.click_interaction_state.link_creation.start_pin_idx];
                     self.should_link_snap_to_pin(start_pin, idx, maybe_duplicate_link_idx)
                 });
 
-                let snapping_pin_changed = self.click_interaction_state.link_creation.end_pin_index.map_or(false, |idx| {
-                    self.hovered_pin_index != Some(idx)
-                });
+                let snapping_pin_changed = self
+                    .click_interaction_state
+                    .link_creation
+                    .end_pin_index
+                    .map_or(false, |idx| self.hovered_pin_index != Some(idx));
 
                 if snapping_pin_changed && self.snap_link_idx.is_some() {
-                    self.begin_link_detach(self.snap_link_idx.unwrap(), self.click_interaction_state.link_creation.end_pin_index.unwrap());
+                    self.begin_link_detach(
+                        self.snap_link_idx.unwrap(),
+                        self.click_interaction_state.link_creation.end_pin_index.unwrap(),
+                    );
                 }
 
-                let start_pin = &self.pins.pool[self.click_interaction_state.link_creation.start_pin_idx];
+                let start_pin =
+                    &self.pins.pool[self.click_interaction_state.link_creation.start_pin_idx];
                 let start_pos = self.get_screen_space_pin_coordinates(start_pin);
 
                 let end_pos = if should_snap {
-                    self.get_screen_space_pin_coordinates(&self.pins.pool[self.hovered_pin_index.unwrap()])
+                    self.get_screen_space_pin_coordinates(
+                        &self.pins.pool[self.hovered_pin_index.unwrap()],
+                    )
                 } else {
                     self.mouse_pos
                 };
 
-                let link_data = LinkBezierData::get_link_renderable(start_pos, end_pos, start_pin.kind, self.style.link_line_segments_per_length);
-                ui.painter().add(link_data.draw((self.style.link_thickness, self.style.colors[ColorStyle::Link as usize])));
+                let link_data = LinkBezierData::get_link_renderable(
+                    start_pos,
+                    end_pos,
+                    start_pin.kind,
+                    self.style.link_line_segments_per_length,
+                );
+                ui.painter().add(link_data.draw((
+                    self.style.link_thickness,
+                    self.style.colors[ColorStyle::Link as usize],
+                )));
 
-                let link_creation_on_snap = self.hovered_pin_index.map_or(false, |idx| (self.pins.pool[idx].flags & AttributeFlags::EnableLinkCreationOnSnap as usize) != 0);
+                let link_creation_on_snap = self.hovered_pin_index.map_or(false, |idx| {
+                    (self.pins.pool[idx].flags & AttributeFlags::EnableLinkCreationOnSnap as usize)
+                        != 0
+                });
 
                 if !should_snap {
                     self.click_interaction_state.link_creation.end_pin_index.take();
                 }
 
-                let create_link = should_snap && (self.left_mouse_released || link_creation_on_snap);
+                let create_link =
+                    should_snap && (self.left_mouse_released || link_creation_on_snap);
 
                 if create_link && maybe_duplicate_link_idx.is_none() {
-                    if !self.left_mouse_released && self.click_interaction_state.link_creation.end_pin_index == self.hovered_pin_index {
+                    if !self.left_mouse_released
+                        && self.click_interaction_state.link_creation.end_pin_index
+                            == self.hovered_pin_index
+                    {
                         return;
                     }
                     self.element_state_change |= ElementStateChange::LinkCreated as usize;
-                    self.click_interaction_state.link_creation.end_pin_index = self.hovered_pin_index;
+                    self.click_interaction_state.link_creation.end_pin_index =
+                        self.hovered_pin_index;
                 }
 
                 if self.left_mouse_released {
@@ -957,34 +1155,38 @@ impl Context {
                         self.element_state_change |= ElementStateChange::LinkDropped as usize;
                     }
                 }
-            },
+            }
             ClickInteractionType::Panning => {
                 if self.alt_mouse_dragging || self.alt_mouse_clicked {
                     self.panning += self.mouse_delta;
                 } else {
                     self.click_interaction_type = ClickInteractionType::None;
                 }
-            },
-            ClickInteractionType::None => ()
+            }
+            ClickInteractionType::None => (),
         }
     }
 
     fn begin_link_detach(&mut self, idx: usize, detach_idx: usize) {
         self.click_interaction_state.link_creation.end_pin_index.take();
         let link = &self.links.pool[idx];
-        self.click_interaction_state.link_creation.start_pin_idx = if detach_idx == link.start_pin_index { 
-            link.end_pin_index 
-        } else { 
-            link.start_pin_index
-        };
+        self.click_interaction_state.link_creation.start_pin_idx =
+            if detach_idx == link.start_pin_index {
+                link.end_pin_index
+            } else {
+                link.start_pin_index
+            };
         self.deleted_link_idx.replace(idx);
     }
 
     fn begin_link_interaction(&mut self, idx: usize) {
         if self.click_interaction_type == ClickInteractionType::LinkCreation {
-            if (self.hovered_pin_flags & AttributeFlags::EnableLinkDetachWithDragClick as usize) != 0 {
+            if (self.hovered_pin_flags & AttributeFlags::EnableLinkDetachWithDragClick as usize)
+                != 0
+            {
                 self.begin_link_detach(idx, self.hovered_pin_index.unwrap());
-                self.click_interaction_state.link_creation.link_creation_type = LinkCreationType::FromDetach;
+                self.click_interaction_state.link_creation.link_creation_type =
+                    LinkCreationType::FromDetach;
             }
         } else if self.link_detatch_with_modifier_click {
             let link = &self.links.pool[idx];
@@ -992,7 +1194,11 @@ impl Context {
             let end_pin = &self.pins.pool[link.end_pin_index];
             let dist_to_start = start_pin.pos.distance(self.mouse_pos);
             let dist_to_end = end_pin.pos.distance(self.mouse_pos);
-            let closest_pin_idx = if dist_to_start < dist_to_end { link.start_pin_index } else {link.end_pin_index};
+            let closest_pin_idx = if dist_to_start < dist_to_end {
+                link.start_pin_index
+            } else {
+                link.end_pin_index
+            };
             self.click_interaction_type = ClickInteractionType::LinkCreation;
             self.begin_link_detach(idx, closest_pin_idx);
         } else {
@@ -1000,7 +1206,7 @@ impl Context {
         }
     }
 
-    fn begin_link_creation(&mut self, hovered_pin_idx: usize)  {
+    fn begin_link_creation(&mut self, hovered_pin_idx: usize) {
         self.click_interaction_type = ClickInteractionType::LinkCreation;
         self.click_interaction_state.link_creation.start_pin_idx = hovered_pin_idx;
         self.click_interaction_state.link_creation.end_pin_index.take();
@@ -1019,7 +1225,9 @@ impl Context {
         let mut test_link = LinkData::new(0);
         test_link.start_pin_index = start_pin_idx;
         test_link.end_pin_index = end_pin_idx;
-        for (idx, (link, in_use)) in self.links.pool.iter().zip(self.links.in_use.iter()).enumerate() {
+        for (idx, (link, in_use)) in
+            self.links.pool.iter().zip(self.links.in_use.iter()).enumerate()
+        {
             if *in_use && *link == test_link {
                 return Some(idx);
             }
@@ -1048,7 +1256,7 @@ enum ElementStateChange {
     None = 0,
     LinkStarted = 1 << 0,
     LinkDropped = 1 << 1,
-    LinkCreated = 1 << 2
+    LinkCreated = 1 << 2,
 }
 
 #[derive(PartialEq, Debug)]
@@ -1058,13 +1266,13 @@ enum ClickInteractionType {
     LinkCreation,
     Panning,
     BoxSelection,
-    None
+    None,
 }
 
 #[derive(PartialEq, Debug)]
 enum LinkCreationType {
     Standard,
-    FromDetach
+    FromDetach,
 }
 
 #[derive(Derivative, Debug)]
@@ -1072,22 +1280,22 @@ enum LinkCreationType {
 struct ClickInteractionStateLinkCreation {
     start_pin_idx: usize,
     end_pin_index: Option<usize>,
-    #[derivative(Default(value="LinkCreationType::Standard"))]
-    link_creation_type: LinkCreationType
+    #[derivative(Default(value = "LinkCreationType::Standard"))]
+    link_creation_type: LinkCreationType,
 }
 
 #[derive(Derivative, Debug)]
 #[derivative(Default)]
 struct ClickInteractionState {
     link_creation: ClickInteractionStateLinkCreation,
-    #[derivative(Default(value="[[0.0; 2].into(); 2].into()"))]
-    box_selection: egui::Rect
+    #[derivative(Default(value = "[[0.0; 2].into(); 2].into()"))]
+    box_selection: egui::Rect,
 }
 
 #[derive(Debug)]
 struct ColorStyleElement {
     color: egui::Color32,
-    item: ColorStyle
+    item: ColorStyle,
 }
 
 impl ColorStyleElement {
@@ -1099,7 +1307,7 @@ impl ColorStyleElement {
 #[derive(Debug)]
 struct StyleElement {
     item: StyleVar,
-    value: f32
+    value: f32,
 }
 
 impl StyleElement {
@@ -1113,16 +1321,16 @@ impl StyleElement {
 #[derivative(Default)]
 pub struct IO {
     /// The Modfier that needs to pressed to pan the editor
-    #[derivative(Default(value="Modifiers::None"))]
+    #[derivative(Default(value = "Modifiers::None"))]
     pub emulate_three_button_mouse: Modifiers,
 
     // The Modifier that needs to be pressed to detatch a link instead of creating a new one
-    #[derivative(Default(value="Modifiers::None"))]
+    #[derivative(Default(value = "Modifiers::None"))]
     pub link_detatch_with_modifier_click: Modifiers,
 
     // The mouse button that pans the editor. Should probably not be set to Primary.
-    #[derivative(Default(value="Some(egui::PointerButton::Middle)"))]
-    pub alt_mouse_button: Option<egui::PointerButton>
+    #[derivative(Default(value = "Some(egui::PointerButton::Middle)"))]
+    pub alt_mouse_button: Option<egui::PointerButton>,
 }
 
 /// Used to track which Egui Modifier needs to be pressed for certain IO actions
@@ -1132,7 +1340,7 @@ pub enum Modifiers {
     Crtl,
     Shift,
     Command,
-    None
+    None,
 }
 
 impl Modifiers {
@@ -1196,7 +1404,6 @@ impl<T: Id> ObjectPool<T> {
                 self.map.insert(id, index);
                 index
             }
-        
         };
         self.in_use[index] = true;
         index
@@ -1206,7 +1413,9 @@ impl<T: Id> ObjectPool<T> {
 impl Context {
     fn node_pool_update(&mut self) {
         self.nodes.free.clear();
-        for (i, (in_use, node)) in self.nodes.in_use.iter_mut().zip(self.nodes.pool.iter_mut()).enumerate() {
+        for (i, (in_use, node)) in
+            self.nodes.in_use.iter_mut().zip(self.nodes.pool.iter_mut()).enumerate()
+        {
             if *in_use {
                 node.pin_indices.clear();
             } else {
