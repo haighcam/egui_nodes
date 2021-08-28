@@ -1,0 +1,1 @@
+chain_width = 100 # avoid splitting chains with a couple of short and long names into strange looking one line each.
