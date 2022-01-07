@@ -137,7 +137,7 @@ impl Context {
         links: impl IntoIterator<Item = (usize, usize, usize, LinkArgs)>,
         ui: &mut egui::Ui,
     ) -> egui::Response {
-        let rect = ui.available_rect_before_wrap_finite();
+        let rect = ui.available_rect_before_wrap();
         self.canvas_rect_screen_space = rect;
         self.canvas_origin_screen_space = self.canvas_rect_screen_space.min.to_vec2();
         {
