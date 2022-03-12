@@ -74,7 +74,7 @@ impl epi::App for MyApp {
         "My egui App"
     }
 
-    fn update(&mut self, ctx: &egui::CtxRef, frame: &epi::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &epi::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
             example_graph(&mut self.ctx, &mut self.links, ui);
