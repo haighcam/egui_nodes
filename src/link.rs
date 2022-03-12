@@ -75,7 +75,7 @@ impl PartialEq for LinkData {
             std::mem::swap(&mut rhs_start, &mut rhs_end);
         }
 
-        lhs_start == rhs_start && lhs_end == rhs_start
+        lhs_start == rhs_start && lhs_end == rhs_end
     }
 }
 
