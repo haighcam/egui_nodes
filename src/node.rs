@@ -115,6 +115,7 @@ pub struct NodeConstructor<'a> {
     pub(crate) id: usize,
     #[derivative(Debug = "ignore")]
     pub(crate) title: Option<Box<dyn FnOnce(&mut egui::Ui) -> egui::Response + 'a>>,
+    #[allow(clippy::type_complexity)]
     #[derivative(Debug = "ignore")]
     pub(crate) attributes: Vec<(
         usize,

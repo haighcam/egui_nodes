@@ -166,9 +166,8 @@ impl Context {
             );
             {
                 let ui = &mut ui;
-                ui.set_clip_rect(
-                    self.canvas_rect_screen_space.intersect(ui.ctx().input().screen_rect()),
-                );
+                let screen_rect = ui.ctx().input().screen_rect();
+                ui.set_clip_rect(self.canvas_rect_screen_space.intersect(screen_rect));
                 ui.painter().rect_filled(
                     self.canvas_rect_screen_space,
                     0.0,

@@ -1,4 +1,4 @@
-use eframe::{egui, epi};
+use eframe::{egui, App};
 use egui_nodes::{Context, LinkArgs, NodeArgs, NodeConstructor, PinArgs, PinShape};
 
 struct MyApp {
@@ -69,12 +69,8 @@ impl Default for MyApp {
     }
 }
 
-impl epi::App for MyApp {
-    fn name(&self) -> &str {
-        "My egui App"
-    }
-
-    fn update(&mut self, ctx: &egui::CtxRef, frame: &epi::Frame) {
+impl App for MyApp {
+    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
             example_graph(&mut self.ctx, &mut self.links, ui);
@@ -86,5 +82,9 @@ impl epi::App for MyApp {
 }
 
 fn main() {
-    eframe::run_native(Box::new(MyApp::default()), eframe::NativeOptions::default());
+    eframe::run_native(
+        "My egui app",
+        eframe::NativeOptions::default(),
+        Box::new(|_cc| Box::new(MyApp::default())),
+    );
 }
