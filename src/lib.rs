@@ -2,7 +2,7 @@
 //!
 //! # Using egui_nodes
 //!
-//! There are some simple examples [here](https://github.com/haighcam/egui_nodes/examples)
+//! There are some simple examples [here](https://github.com/haighcam/egui_nodes/tree/main/examples)
 //!
 //! Here is the basic usage:
 //! ``` rust
