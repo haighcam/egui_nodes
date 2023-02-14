@@ -86,5 +86,6 @@ fn main() {
         "My egui app",
         eframe::NativeOptions::default(),
         Box::new(|_cc| Box::new(MyApp::default())),
-    );
+    )
+    .unwrap();
 }

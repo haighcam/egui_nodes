@@ -166,7 +166,7 @@ impl Context {
             );
             {
                 let ui = &mut ui;
-                let screen_rect = ui.ctx().input().screen_rect();
+                let screen_rect = ui.ctx().input(|input| input.screen_rect());
                 ui.set_clip_rect(self.canvas_rect_screen_space.intersect(screen_rect));
                 ui.painter().rect_filled(
                     self.canvas_rect_screen_space,
@@ -198,8 +198,7 @@ impl Context {
                 ui.id().with("Input"),
                 egui::Sense::click_and_drag(),
             );
-            {
-                let io = ui.ctx().input();
+            ui.ctx().input(|io| {
                 let mouse_pos = if let Some(mouse_pos) = response.hover_pos() {
                     self.mouse_in_canvas = true;
                     mouse_pos
@@ -225,7 +224,7 @@ impl Context {
                     alt_mouse_clicked && !(self.alt_mouse_clicked || self.alt_mouse_dragging);
                 self.link_detatch_with_modifier_click =
                     self.io.link_detatch_with_modifier_click.is_active(&io.modifiers);
-            }
+            });
             {
                 let ui = &mut ui;
                 if self.mouse_in_canvas {
