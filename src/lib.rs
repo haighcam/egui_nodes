@@ -166,9 +166,7 @@ impl Context {
             );
             {
                 let ui = &mut ui;
-                ui.set_clip_rect(
-                    self.canvas_rect_screen_space.intersect(ui.ctx().input().screen_rect()),
-                );
+                ui.set_clip_rect(self.canvas_rect_screen_space.intersect(ui.ctx().screen_rect()));
                 ui.painter().rect_filled(
                     self.canvas_rect_screen_space,
                     0.0,
@@ -200,7 +198,7 @@ impl Context {
                 egui::Sense::click_and_drag(),
             );
             {
-                let io = ui.ctx().input();
+                let io = ui.ctx().input(|i| i.clone());
                 let mouse_pos = if let Some(mouse_pos) = response.hover_pos() {
                     self.mouse_in_canvas = true;
                     mouse_pos
