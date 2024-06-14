@@ -1,4 +1,4 @@
-use eframe::{egui, epi};
+use eframe::egui;
 use egui_nodes::{Context, LinkArgs, NodeArgs, NodeConstructor, PinArgs, PinShape};
 
 struct MyApp {
@@ -69,22 +69,19 @@ impl Default for MyApp {
     }
 }
 
-impl epi::App for MyApp {
-    fn name(&self) -> &str {
-        "My egui App"
-    }
-
-    fn update(&mut self, ctx: &egui::CtxRef, frame: &epi::Frame) {
+impl eframe::App for MyApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
             example_graph(&mut self.ctx, &mut self.links, ui);
         });
-
-        // Resize the native window to be just the size we need it to be:
-        frame.set_window_size(ctx.used_size());
     }
 }
 
-fn main() {
-    eframe::run_native(Box::new(MyApp::default()), eframe::NativeOptions::default());
+fn main() -> eframe::Result<()> {
+    eframe::run_native(
+        "Simple",
+        eframe::NativeOptions::default(),
+        Box::new(|_| Box::<MyApp>::default()),
+    )
 }

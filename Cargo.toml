@@ -9,8 +9,8 @@ description = "A Egui port of https://github.com/Nelarius/imnodes"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-egui = "0.16"
+egui = "0.27"
 derivative = "2.2.0"
 
 [dev-dependencies]
-eframe = "0.16"
+eframe = "0.27"
